@@ -1,0 +1,30 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { handleClub } from "@/lib/club-server";
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
+export const Route = createFileRoute("/api/club")({
+  server: {
+    handlers: {
+      GET: async () => json({ ok: true, name: "Ace Club", fa: "آس کلاب" }),
+      POST: async ({ request }) => {
+        try {
+          const body = (await request.json()) as Record<string, unknown>;
+          const op = String(body.op ?? "health");
+          const header = request.headers.get("authorization") ?? "";
+          const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+          const result = await handleClub(op, body, token);
+          return json(result);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "خطای سرور";
+          return json({ error: message }, 400);
+        }
+      },
+    },
+  },
+});

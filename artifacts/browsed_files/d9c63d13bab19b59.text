@@ -1,0 +1,310 @@
+import {
+  CASHOUT_MAX_MULTIPLIER,
+  DAILY_BONUS,
+  DAILY_CASHOUT_CAP,
+  DEFAULT_CARD_NAME,
+  DEFAULT_CARD_NUMBER,
+  MIN_CASHOUT_CHIPS,
+  PACKAGES,
+  WELCOME_CHIPS,
+  cashoutToman,
+  winCashable,
+} from "@/lib/economy";
+import { uid } from "@/lib/utils";
+import type { AdminQueue, ClubConfig, ClubStats, ClubUser, Tx } from "@/lib/club-types";
+
+const KEY = "aceclub.local.v2";
+
+interface LocalDb {
+  version: number;
+  users: ClubUser[];
+  sessions: { token: string; userId: string }[];
+  txs: Tx[];
+  config: ClubConfig;
+  daily: Record<string, string>;
+  rakeChips: number;
+}
+
+function emptyDb(): LocalDb {
+  return {
+    version: 2,
+    users: [],
+    sessions: [],
+    txs: [],
+    config: {
+      cardNumber: DEFAULT_CARD_NUMBER,
+      cardName: DEFAULT_CARD_NAME,
+      adminPass: "aceclub",
+    },
+    daily: {},
+    rakeChips: 0,
+  };
+}
+
+function load(): LocalDb {
+  try {
+    const raw = localStorage.getItem(KEY) ?? localStorage.getItem("aceclub.local.v1");
+    if (!raw) return emptyDb();
+    const parsed = JSON.parse(raw) as Partial<LocalDb>;
+    const db = { ...emptyDb(), ...parsed, version: 2 };
+    db.users = (db.users ?? []).map((u) => ({
+      ...u,
+      depositedToman: u.depositedToman ?? 0,
+      cashedToman: u.cashedToman ?? 0,
+    }));
+    return db;
+  } catch {
+    return emptyDb();
+  }
+}
+
+function save(db: LocalDb) {
+  localStorage.setItem(KEY, JSON.stringify(db));
+}
+
+function publicUser(u: ClubUser): ClubUser {
+  return {
+    id: u.id,
+    username: u.username,
+    phone: u.phone,
+    chips: u.chips,
+    cashable: u.cashable,
+    depositedToman: u.depositedToman ?? 0,
+    cashedToman: u.cashedToman ?? 0,
+  };
+}
+
+function stats(db: LocalDb): ClubStats {
+  return {
+    users: db.users.length,
+    pendingDeposits: db.txs.filter((t) => t.kind === "deposit" && t.status === "pending").length,
+    pendingCashouts: db.txs.filter((t) => t.kind === "cashout" && t.status === "pending").length,
+    depositedToman: db.users.reduce((s, u) => s + (u.depositedToman || 0), 0),
+    cashedToman: db.users.reduce((s, u) => s + (u.cashedToman || 0), 0),
+    rakeChips: db.rakeChips,
+  };
+}
+
+function userFromToken(db: LocalDb, token: string) {
+  const s = db.sessions.find((x) => x.token === token);
+  if (!s) throw new Error("نشست منقضی شده.");
+  const user = db.users.find((u) => u.id === s.userId);
+  if (!user) throw new Error("کاربر پیدا نشد.");
+  return user;
+}
+
+export const localClub = {
+  config(): ClubConfig {
+    const c = load().config;
+    return { ...c, adminPass: "" };
+  },
+  setConfig(patch: Partial<ClubConfig>) {
+    const db = load();
+    db.config = { ...db.config, ...patch };
+    save(db);
+    return { ...db.config, adminPass: "" };
+  },
+  upsertRemote(user: ClubUser, token: string) {
+    const db = load();
+    const i = db.users.findIndex((u) => u.id === user.id || u.username === user.username);
+    const next = { ...user };
+    if (i >= 0) db.users[i] = { ...db.users[i], ...next };
+    else db.users.push(next);
+    if (!db.sessions.some((s) => s.token === token)) {
+      db.sessions.push({ token, userId: next.id });
+    }
+    save(db);
+  },
+  register(username: string, phone: string, password: string) {
+    const db = load();
+    if (db.users.some((u) => u.username === username)) {
+      throw new Error("این نام کاربری قبلاً ثبت شده.");
+    }
+    const user: ClubUser = {
+      id: uid("u"),
+      username,
+      phone,
+      password,
+      chips: WELCOME_CHIPS,
+      cashable: 0,
+      depositedToman: 0,
+      cashedToman: 0,
+    };
+    db.users.push(user);
+    db.txs.push({
+      id: uid("tx"),
+      userId: user.id,
+      kind: "bonus",
+      chips: WELCOME_CHIPS,
+      toman: 0,
+      status: "done",
+      note: "ژتون خوش‌آمد — غیرقابل برداشت",
+      createdAt: Date.now(),
+    });
+    const token = uid("tok");
+    db.sessions.push({ token, userId: user.id });
+    save(db);
+    return { token, user: publicUser(user) };
+  },
+  login(username: string, password: string) {
+    const db = load();
+    const user = db.users.find((u) => u.username === username && u.password === password);
+    if (!user) throw new Error("نام کاربری یا رمز نادرست است.");
+    const token = uid("tok");
+    db.sessions.push({ token, userId: user.id });
+    save(db);
+    return { token, user: publicUser(user) };
+  },
+  me(token: string) {
+    return publicUser(userFromToken(load(), token));
+  },
+  applyDelta(token: string, delta: number, note: string, rake = 0) {
+    const db = load();
+    const user = userFromToken(db, token);
+    user.chips = Math.max(0, user.chips + delta);
+    if (delta > 0) user.cashable += winCashable(delta);
+    user.cashable = Math.min(user.cashable, user.chips);
+    db.rakeChips += Math.max(0, rake);
+    db.txs.push({
+      id: uid("tx"),
+      userId: user.id,
+      kind: delta >= 0 ? "win" : "lose",
+      chips: delta,
+      toman: 0,
+      status: "done",
+      note,
+      createdAt: Date.now(),
+    });
+    save(db);
+    return publicUser(user);
+  },
+  deposit(token: string, packId: string, track: string) {
+    const db = load();
+    const s = db.sessions.find((x) => x.token === token);
+    if (!s) throw new Error("نشست منقضی شده.");
+    const pack = PACKAGES.find((p) => p.id === packId);
+    if (!pack) throw new Error("بسته نامعتبر.");
+    const tx: Tx = {
+      id: uid("tx"),
+      userId: s.userId,
+      kind: "deposit",
+      chips: pack.chips + pack.bonus,
+      toman: pack.toman,
+      status: "pending",
+      note: `کد پیگیری: ${track} · ${pack.label}`,
+      createdAt: Date.now(),
+      packId,
+    };
+    db.txs.push(tx);
+    save(db);
+    return tx;
+  },
+  cashout(token: string, chips: number, card: string) {
+    const db = load();
+    const user = userFromToken(db, token);
+    if (chips < MIN_CASHOUT_CHIPS) throw new Error("حداقل برداشت ۱۰٬۰۰۰ ژتون است.");
+    if (chips > user.cashable) throw new Error("ژتون قابل‌برداشت کافی نیست.");
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const today = db.txs
+      .filter(
+        (t) =>
+          t.userId === user.id &&
+          t.kind === "cashout" &&
+          t.status !== "rejected" &&
+          t.createdAt >= start.getTime(),
+      )
+      .reduce((s, t) => s + Math.abs(t.chips), 0);
+    if (today + chips > DAILY_CASHOUT_CAP) throw new Error("سقف برداشت روزانه پر شده است.");
+    const money = cashoutToman(chips);
+    const cap = (user.depositedToman || 0) * CASHOUT_MAX_MULTIPLIER;
+    if ((user.cashedToman || 0) + money.net > cap) {
+      throw new Error("سقف برداشت نسبت به واریزی‌ها پر شده. اول ژتون بخرید.");
+    }
+    user.chips -= chips;
+    user.cashable -= chips;
+    const tx: Tx = {
+      id: uid("tx"),
+      userId: user.id,
+      kind: "cashout",
+      chips: -chips,
+      toman: money.net,
+      status: "pending",
+      note: `کارت مقصد: ${card}`,
+      createdAt: Date.now(),
+    };
+    db.txs.push(tx);
+    save(db);
+    return { tx, user: publicUser(user), money };
+  },
+  daily(token: string) {
+    const db = load();
+    const user = userFromToken(db, token);
+    const today = new Date().toISOString().slice(0, 10);
+    if (db.daily[user.id] === today) throw new Error("جایزه امروز را گرفته‌اید.");
+    user.chips += DAILY_BONUS;
+    db.daily[user.id] = today;
+    db.txs.push({
+      id: uid("tx"),
+      userId: user.id,
+      kind: "bonus",
+      chips: DAILY_BONUS,
+      toman: 0,
+      status: "done",
+      note: "جایزه روزانه — غیرقابل برداشت",
+      createdAt: Date.now(),
+    });
+    save(db);
+    return publicUser(user);
+  },
+  history(token: string): Tx[] {
+    const db = load();
+    const s = db.sessions.find((x) => x.token === token);
+    if (!s) return [];
+    return db.txs.filter((t) => t.userId === s.userId).sort((a, b) => b.createdAt - a.createdAt);
+  },
+  adminLogin(password: string) {
+    const db = load();
+    if (password !== db.config.adminPass) throw new Error("رمز مدیریت نادرست است.");
+    const token = uid("adm");
+    db.sessions.push({ token, userId: "__admin__" });
+    save(db);
+    return { ok: true, token };
+  },
+  adminQueue(): AdminQueue {
+    const db = load();
+    return {
+      pending: db.txs.filter((t) => t.status === "pending"),
+      users: db.users.map(publicUser),
+      config: { ...db.config, adminPass: "" },
+      stats: stats(db),
+    };
+  },
+  adminDecide(txId: string, approve: boolean) {
+    const db = load();
+    const tx = db.txs.find((t) => t.id === txId);
+    if (!tx) throw new Error("تراکنش پیدا نشد.");
+    const user = db.users.find((u) => u.id === tx.userId);
+    if (!user) throw new Error("کاربر پیدا نشد.");
+    if (tx.kind === "deposit") {
+      if (approve) {
+        user.chips += tx.chips;
+        const pack = PACKAGES.find((p) => p.id === tx.packId);
+        user.cashable += pack ? pack.chips : tx.chips;
+        user.depositedToman += tx.toman;
+        tx.status = "approved";
+      } else tx.status = "rejected";
+    } else if (tx.kind === "cashout") {
+      if (approve) {
+        user.cashedToman += tx.toman;
+        tx.status = "approved";
+      } else {
+        user.chips += Math.abs(tx.chips);
+        user.cashable += Math.abs(tx.chips);
+        tx.status = "rejected";
+      }
+    }
+    save(db);
+    return tx;
+  },
+};

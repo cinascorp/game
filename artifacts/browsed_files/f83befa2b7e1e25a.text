@@ -1,0 +1,51 @@
+let ctx: AudioContext | null = null;
+
+function ac() {
+  if (typeof window === "undefined") return null;
+  ctx ??= new AudioContext();
+  if (ctx.state === "suspended") void ctx.resume();
+  return ctx;
+}
+
+export function playSfx(kind: "chip" | "card" | "win" | "fold") {
+  const audio = ac();
+  if (!audio) return;
+  const t = audio.currentTime;
+  const o = audio.createOscillator();
+  const g = audio.createGain();
+  o.connect(g);
+  g.connect(audio.destination);
+  if (kind === "card") {
+    o.type = "triangle";
+    o.frequency.setValueAtTime(420, t);
+    o.frequency.exponentialRampToValueAtTime(180, t + 0.08);
+    g.gain.setValueAtTime(0.04, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.start(t);
+    o.stop(t + 0.1);
+  } else if (kind === "chip") {
+    o.type = "square";
+    o.frequency.setValueAtTime(880, t);
+    o.frequency.exponentialRampToValueAtTime(440, t + 0.06);
+    g.gain.setValueAtTime(0.03, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    o.start(t);
+    o.stop(t + 0.08);
+  } else if (kind === "fold") {
+    o.type = "sine";
+    o.frequency.setValueAtTime(220, t);
+    g.gain.setValueAtTime(0.03, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    o.start(t);
+    o.stop(t + 0.12);
+  } else {
+    o.type = "sine";
+    o.frequency.setValueAtTime(523, t);
+    o.frequency.setValueAtTime(659, t + 0.08);
+    o.frequency.setValueAtTime(784, t + 0.16);
+    g.gain.setValueAtTime(0.05, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+    o.start(t);
+    o.stop(t + 0.32);
+  }
+}

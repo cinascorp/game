@@ -1,0 +1,769 @@
+import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  Copy,
+  CreditCard,
+  Download,
+  Landmark,
+  LogOut,
+  Settings,
+  Spade,
+  Store,
+  Trophy,
+  Users,
+  Wallet,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { TableView } from "@/components/table-view";
+import { clubApi, getSavedServer, getToken, setSavedServer, setToken } from "@/lib/club-client";
+import type { ClubConfig, ClubStats, ClubUser, Tx } from "@/lib/club-types";
+import {
+  DEFAULT_SERVER,
+  MIN_CASHOUT_CHIPS,
+  PACKAGES,
+  SELL_TOMAN_PER_1000,
+  TABLES,
+  WELCOME_CHIPS,
+  cashoutToman,
+} from "@/lib/economy";
+import { createTable, startHand, type TableState } from "@/lib/poker";
+import { playSfx } from "@/lib/sfx";
+import { faNum } from "@/lib/utils";
+
+type View =
+  | "splash"
+  | "auth"
+  | "lobby"
+  | "table"
+  | "shop"
+  | "wallet"
+  | "cashout"
+  | "admin"
+  | "settings";
+
+const emptyStats: ClubStats = {
+  users: 0,
+  pendingDeposits: 0,
+  pendingCashouts: 0,
+  depositedToman: 0,
+  cashedToman: 0,
+  rakeChips: 0,
+};
+
+export function AceClub() {
+  const [view, setView] = useState<View>("splash");
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [user, setUser] = useState<ClubUser | null>(null);
+  const [online, setOnline] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [table, setTable] = useState<TableState | null>(null);
+  const [buyin, setBuyin] = useState(0);
+  const [config, setConfig] = useState<ClubConfig | null>(null);
+  const [txs, setTxs] = useState<Tx[]>([]);
+  const [adminOk, setAdminOk] = useState(false);
+  const [pending, setPending] = useState<Tx[]>([]);
+  const [stats, setStats] = useState<ClubStats>(emptyStats);
+  const [adminUsers, setAdminUsers] = useState<ClubUser[]>([]);
+  const [form, setForm] = useState({
+    username: "",
+    phone: "",
+    password: "",
+    track: "",
+    packId: PACKAGES[0].id as string,
+    cashChips: String(MIN_CASHOUT_CHIPS),
+    destCard: "",
+    adminPass: "",
+    server: getSavedServer() || DEFAULT_SERVER,
+    cardNumber: "",
+    cardName: "",
+    newAdmin: "",
+  });
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (getToken()) {
+        clubApi
+          .me()
+          .then(async ({ user: u, online: on }) => {
+            setUser(u);
+            setOnline(on);
+            setView("lobby");
+            if (on) await clubApi.flush();
+          })
+          .catch(() => {
+            setToken(null);
+            setView("auth");
+          });
+      } else setView("auth");
+    }, 700);
+    clubApi.ping().then(async (ok) => {
+      setOnline(ok);
+      if (ok) await clubApi.flush();
+    });
+    clubApi
+      .config()
+      .then(({ config: c }) => setConfig(c))
+      .catch(() => {});
+    return () => window.clearTimeout(t);
+  }, []);
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "خطا");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sit = (t: (typeof TABLES)[number]) => {
+    if (!user) return;
+    if (user.chips < t.min) {
+      toast.error("ژتون کافی برای این میز ندارید.");
+      return;
+    }
+    playSfx("card");
+    const stack = Math.min(user.chips, t.max, Math.max(t.min, t.bb * 80));
+    const next = startHand(
+      createTable({
+        id: t.id,
+        name: t.name,
+        sb: t.sb,
+        bb: t.bb,
+        heroName: user.username,
+        heroStack: stack,
+      }),
+    );
+    setBuyin(stack);
+    setUser({
+      ...user,
+      chips: user.chips - stack,
+      cashable: Math.min(user.cashable, user.chips - stack),
+    });
+    setTable(next);
+    setView("table");
+  };
+
+  const leaveTable = (stack: number, rake: number) => {
+    if (!user) return;
+    const delta = stack - buyin;
+    const chips = user.chips + stack;
+    setTable(null);
+    setView("lobby");
+    clubApi
+      .applyDelta(delta, `میز ${table?.name ?? ""}`, rake)
+      .then(({ user: u, online: on }) => {
+        setUser(u);
+        setOnline(on);
+      })
+      .catch(() => {
+        setUser({ ...user, chips });
+      });
+  };
+
+  if (view === "splash") {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-bg text-fg">
+        <Spade className="size-10 text-accent" strokeWidth={1.5} />
+        <h1 className="mt-4 text-3xl font-medium tracking-tight">آس کلاب</h1>
+        <p className="mt-2 text-sm text-muted">باشگاه تگزاس هولدم</p>
+      </div>
+    );
+  }
+
+  if (view === "table" && table) {
+    return <TableView table={table} onChange={setTable} onLeave={leaveTable} />;
+  }
+
+  return (
+    <div className="mx-auto min-h-dvh max-w-lg bg-bg text-fg">
+      {view !== "auth" && user && (
+        <header className="flex items-center justify-between px-4 pt-[max(0.9rem,env(safe-area-inset-top))] pb-3">
+          <button type="button" onClick={() => setView("lobby")} className="flex h-11 items-center gap-2">
+            <Spade className="size-5 text-accent" strokeWidth={1.6} />
+            <span className="font-medium">آس کلاب</span>
+          </button>
+          <div className="flex items-center gap-2">
+            <span
+              className={`size-1.5 rounded-full ${online ? "bg-win" : "bg-muted"}`}
+              title={online ? "متصل به سرور" : "حالت آفلاین"}
+            />
+            <span className="text-sm tabular-nums text-chip">{faNum(user.chips)}</span>
+          </div>
+        </header>
+      )}
+
+      {view === "auth" && (
+        <main className="flex min-h-dvh flex-col justify-center px-6">
+          <Spade className="size-8 text-accent" strokeWidth={1.5} />
+          <h1 className="mt-4 text-3xl font-medium">آس کلاب</h1>
+          <p className="mt-2 text-sm text-muted">ورود به باشگاه. حساب روی سرور شما ساخته می‌شود.</p>
+          <div className="mt-8 flex gap-2 rounded-lg bg-surface p-1">
+            <button
+              type="button"
+              className={`h-10 flex-1 rounded-md text-sm ${mode === "login" ? "bg-surface-2" : "text-muted"}`}
+              onClick={() => setMode("login")}
+            >
+              ورود
+            </button>
+            <button
+              type="button"
+              className={`h-10 flex-1 rounded-md text-sm ${mode === "register" ? "bg-surface-2" : "text-muted"}`}
+              onClick={() => setMode("register")}
+            >
+              عضویت
+            </button>
+          </div>
+          <form
+            className="mt-6 space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(async () => {
+                const res =
+                  mode === "register"
+                    ? await clubApi.register(form.username, form.phone, form.password)
+                    : await clubApi.login(form.username, form.password);
+                setUser(res.user);
+                setOnline(res.online);
+                setView("lobby");
+                toast.success(res.online ? "متصل به سرور باشگاه" : "ورود محلی — بعداً همگام می‌شود");
+              });
+            }}
+          >
+            <label className="block text-sm text-muted">
+              نام کاربری
+              <Input
+                className="mt-1"
+                value={form.username}
+                autoComplete="username"
+                onChange={(e) => setForm({ ...form, username: e.target.value })}
+              />
+            </label>
+            {mode === "register" && (
+              <label className="block text-sm text-muted">
+                موبایل
+                <Input
+                  className="mt-1"
+                  inputMode="numeric"
+                  placeholder="09xxxxxxxxx"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                />
+              </label>
+            )}
+            <label className="block text-sm text-muted">
+              رمز
+              <Input
+                className="mt-1"
+                type="password"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+              />
+            </label>
+            <Button className="mt-2 w-full" disabled={busy} type="submit">
+              {mode === "login" ? "ورود" : "ساخت حساب"}
+            </Button>
+          </form>
+          <p className="mt-6 text-xs leading-6 text-muted">
+            با عضویت {faNum(WELCOME_CHIPS)} ژتون تمرینی می‌گیرید. خرید و برداشت فقط از طریق سرور باشگاه
+            انجام می‌شود.
+          </p>
+        </main>
+      )}
+
+      {view === "lobby" && user && (
+        <main className="px-4 pb-24">
+          <section className="rounded-xl bg-surface p-4">
+            <p className="text-xs text-muted">موجودی ژتون</p>
+            <p className="mt-1 text-3xl font-medium tabular-nums">{faNum(user.chips)}</p>
+            <p className="mt-1 text-xs text-muted">
+              قابل برداشت {faNum(user.cashable)} · {user.username}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Button onClick={() => setView("shop")}>
+                <Store className="size-4" /> خرید ژتون
+              </Button>
+              <Button variant="secondary" onClick={() => setView("cashout")}>
+                <Landmark className="size-4" /> فروش ژتون
+              </Button>
+            </div>
+          </section>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <Button
+              variant="secondary"
+              onClick={() =>
+                run(async () => {
+                  const { user: u } = await clubApi.daily();
+                  setUser(u);
+                  toast.success("جایزه روزانه واریز شد");
+                })
+              }
+            >
+              <Trophy className="size-4" /> روزانه
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                run(async () => {
+                  const { txs: list } = await clubApi.history();
+                  setTxs(list);
+                  setView("wallet");
+                })
+              }
+            >
+              <Wallet className="size-4" /> گردش
+            </Button>
+            <Button variant="secondary" onClick={() => setView("settings")}>
+              <Settings className="size-4" /> تنظیمات
+            </Button>
+          </div>
+
+          <h2 className="mt-8 text-sm text-muted">میزهای نقدی</h2>
+          <div className="mt-3 space-y-2">
+            {TABLES.map((t) => {
+              const locked = user.chips < t.min;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => sit(t)}
+                  className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-right disabled:opacity-50"
+                  disabled={locked}
+                >
+                  <div>
+                    <p className="font-medium">{t.name}</p>
+                    <p className="text-xs text-muted">
+                      {t.tag} · بلایند {faNum(t.sb)}/{faNum(t.bb)} · ۶ نفره
+                    </p>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs text-muted">{locked ? "ژتون کم" : "ورود"}</p>
+                    <p className="text-sm tabular-nums">{faNum(t.min)}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-4 text-xs leading-6 text-muted">
+            بازی روی دستگاه شما اجرا می‌شود. فقط ورود، خرید، برداشت و نتیجه میز با سرور همگام می‌شود.
+          </p>
+        </main>
+      )}
+
+      {view === "shop" && user && (
+        <main className="px-4 pb-24">
+          <Back onClick={() => setView("lobby")} />
+          <h1 className="text-2xl font-medium">خرید ژتون</h1>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            مبلغ بسته را کارت‌به‌کارت کنید، کد پیگیری را بفرستید. بعد از تأیید مدیریت، ژتون واریز می‌شود.
+          </p>
+          <div className="mt-4 rounded-lg border border-border bg-surface p-4">
+            <p className="text-xs text-muted">شماره کارت باشگاه</p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <p className="font-medium tracking-wide" dir="ltr">
+                {config?.cardNumber ?? "XXXX-XXXX-XXXX-XXXX"}
+              </p>
+              <button
+                type="button"
+                className="flex size-11 items-center justify-center text-muted"
+                onClick={() => {
+                  const n = config?.cardNumber ?? "";
+                  void navigator.clipboard?.writeText(n.replace(/\s/g, ""));
+                  toast.success("شماره کارت کپی شد");
+                }}
+              >
+                <Copy className="size-4" />
+              </button>
+            </div>
+            <p className="text-xs text-muted">{config?.cardName}</p>
+          </div>
+          <div className="mt-4 space-y-2">
+            {PACKAGES.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setForm({ ...form, packId: p.id })}
+                className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 ${
+                  form.packId === p.id ? "border-accent bg-surface" : "border-border bg-surface"
+                }`}
+              >
+                <div>
+                  <p>{p.label}</p>
+                  <p className="text-xs text-muted">
+                    {faNum(p.chips)} ژتون
+                    {p.bonus ? ` + ${faNum(p.bonus)} هدیه` : ""}
+                  </p>
+                </div>
+                <p className="text-sm tabular-nums">{faNum(p.toman)} تومان</p>
+              </button>
+            ))}
+          </div>
+          <label className="mt-4 block text-sm text-muted">
+            کد پیگیری / چهار رقم آخر واریز
+            <Input
+              className="mt-1"
+              value={form.track}
+              onChange={(e) => setForm({ ...form, track: e.target.value })}
+            />
+          </label>
+          <Button
+            className="mt-4 w-full"
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                await clubApi.deposit(form.packId, form.track);
+                toast.success("درخواست خرید ثبت شد. منتظر تأیید بمانید.");
+                setView("lobby");
+              })
+            }
+          >
+            <CreditCard className="size-4" /> ثبت واریز
+          </Button>
+        </main>
+      )}
+
+      {view === "cashout" && user && (
+        <main className="px-4 pb-24">
+          <Back onClick={() => setView("lobby")} />
+          <h1 className="text-2xl font-medium">فروش ژتون</h1>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            هر ۱۰۰۰ ژتون قابل‌برداشت معادل {faNum(SELL_TOMAN_PER_1000)} تومان است. کارمزد باشگاه ۸٪ کسر
+            می‌شود. ژتون جایزه و خوش‌آمد قابل برداشت نیست.
+          </p>
+          <p className="mt-3 text-sm">قابل برداشت: {faNum(user.cashable)}</p>
+          <label className="mt-4 block text-sm text-muted">
+            تعداد ژتون
+            <Input
+              className="mt-1"
+              inputMode="numeric"
+              value={form.cashChips}
+              onChange={(e) => setForm({ ...form, cashChips: e.target.value })}
+            />
+          </label>
+          {(() => {
+            const n = Math.trunc(Number(form.cashChips) || 0);
+            const m = cashoutToman(n);
+            return (
+              <p className="mt-2 text-sm text-muted">
+                خالص دریافتی {faNum(m.net)} تومان (کارمزد {faNum(m.fee)})
+              </p>
+            );
+          })()}
+          <label className="mt-4 block text-sm text-muted">
+            شماره کارت شما
+            <Input
+              className="mt-1"
+              dir="ltr"
+              value={form.destCard}
+              onChange={(e) => setForm({ ...form, destCard: e.target.value })}
+            />
+          </label>
+          <Button
+            className="mt-4 w-full"
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                const { user: u } = await clubApi.cashout(
+                  Math.trunc(Number(form.cashChips) || 0),
+                  form.destCard,
+                );
+                setUser(u);
+                toast.success("درخواست برداشت ثبت شد.");
+                setView("lobby");
+              })
+            }
+          >
+            ثبت برداشت
+          </Button>
+        </main>
+      )}
+
+      {view === "wallet" && (
+        <main className="px-4 pb-24">
+          <Back onClick={() => setView("lobby")} />
+          <h1 className="text-2xl font-medium">گردش حساب</h1>
+          <ul className="mt-4 space-y-2">
+            {txs.length === 0 && <p className="text-sm text-muted">هنوز تراکنشی نیست.</p>}
+            {txs.map((t) => (
+              <li key={t.id} className="rounded-lg border border-border bg-surface px-4 py-3">
+                <div className="flex justify-between text-sm">
+                  <span>{kindFa(t.kind)}</span>
+                  <span className="tabular-nums">{faNum(t.chips)}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted">
+                  {statusFa(t.status)} · {t.note}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </main>
+      )}
+
+      {view === "settings" && (
+        <main className="px-4 pb-24">
+          <Back onClick={() => setView("lobby")} />
+          <h1 className="text-2xl font-medium">تنظیمات باشگاه</h1>
+          <label className="mt-4 block text-sm text-muted">
+            آدرس سرور
+            <Input
+              className="mt-1"
+              dir="ltr"
+              value={form.server}
+              onChange={(e) => setForm({ ...form, server: e.target.value })}
+            />
+          </label>
+          <Button
+            className="mt-3 w-full"
+            variant="secondary"
+            onClick={() => {
+              setSavedServer(form.server);
+              clubApi.ping().then((ok) => {
+                setOnline(ok);
+                toast.success(ok ? "سرور در دسترس است" : "سرور در دسترس نیست — بازی محلی فعال است");
+              });
+            }}
+          >
+            ذخیره و تست اتصال
+          </Button>
+
+          <div className="mt-6 rounded-lg border border-border p-4">
+            <p className="text-sm font-medium">خروجی برای ویندوز و سرور</p>
+            <p className="mt-2 text-xs leading-6 text-muted">
+              فایل index.html را با WebToAPKBuilder به اپ تبدیل کنید. فایل سرور را روی سیستم با آی‌پی
+              ثابت اجرا کنید تا روی پورت ۸۰۸۰ گوش بدهد.
+            </p>
+            <a
+              href="/apk/index.html"
+              download="index.html"
+              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border text-sm"
+            >
+              <Download className="size-4" /> دانلود index.html
+            </a>
+            <a
+              href="/apk/server.mjs"
+              download="server.mjs"
+              className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border text-sm"
+            >
+              <Download className="size-4" /> دانلود سرور باشگاه
+            </a>
+          </div>
+
+          <div className="mt-6 rounded-lg border border-border p-4">
+            <p className="flex items-center gap-2 text-sm">
+              <Users className="size-4" /> پنل مدیریت
+            </p>
+            <Input
+              className="mt-3"
+              type="password"
+              placeholder="رمز مدیریت"
+              value={form.adminPass}
+              onChange={(e) => setForm({ ...form, adminPass: e.target.value })}
+            />
+            <Button
+              className="mt-3 w-full"
+              variant="secondary"
+              disabled={busy}
+              onClick={() =>
+                run(async () => {
+                  await clubApi.adminLogin(form.adminPass);
+                  const q = await clubApi.adminQueue();
+                  setPending(q.pending);
+                  setConfig(q.config);
+                  setStats(q.stats);
+                  setAdminUsers(q.users);
+                  setAdminOk(true);
+                  setForm({
+                    ...form,
+                    cardNumber: q.config.cardNumber,
+                    cardName: q.config.cardName,
+                  });
+                  setView("admin");
+                })
+              }
+            >
+              ورود مدیریت
+            </Button>
+            <p className="mt-2 text-xs text-muted">رمز پیش‌فرض: aceclub — حتماً عوض کنید.</p>
+          </div>
+          <Button
+            className="mt-6 w-full"
+            variant="ghost"
+            onClick={() => {
+              setToken(null);
+              setUser(null);
+              setView("auth");
+            }}
+          >
+            <LogOut className="size-4" /> خروج از حساب
+          </Button>
+        </main>
+      )}
+
+      {view === "admin" && adminOk && (
+        <main className="px-4 pb-24">
+          <Back onClick={() => setView("lobby")} />
+          <h1 className="text-2xl font-medium">مدیریت باشگاه</h1>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Stat label="اعضا" value={faNum(stats.users)} />
+            <Stat label="رِیک ژتون" value={faNum(stats.rakeChips)} />
+            <Stat label="واریزی" value={`${faNum(stats.depositedToman)} ت`} />
+            <Stat label="پرداختی" value={`${faNum(stats.cashedToman)} ت`} />
+          </div>
+          <p className="mt-3 text-xs leading-6 text-muted">
+            سود باشگاه از سه جا می‌آید: رِیک ۵٪ هر پات، اختلاف خرید و فروش ژتون، و کارمزد ۸٪ برداشت.
+            ژتون جایزه قابل نقد شدن نیست. سقف برداشت روزانه و سقف ۲ برابر واریزی جلوی ضرر را می‌گیرد.
+          </p>
+          <label className="mt-4 block text-sm text-muted">
+            شماره کارت
+            <Input
+              className="mt-1"
+              dir="ltr"
+              value={form.cardNumber}
+              onChange={(e) => setForm({ ...form, cardNumber: e.target.value })}
+            />
+          </label>
+          <label className="mt-3 block text-sm text-muted">
+            نام صاحب کارت
+            <Input
+              className="mt-1"
+              value={form.cardName}
+              onChange={(e) => setForm({ ...form, cardName: e.target.value })}
+            />
+          </label>
+          <label className="mt-3 block text-sm text-muted">
+            رمز جدید مدیریت
+            <Input
+              className="mt-1"
+              type="password"
+              value={form.newAdmin}
+              onChange={(e) => setForm({ ...form, newAdmin: e.target.value })}
+            />
+          </label>
+          <Button
+            className="mt-3 w-full"
+            variant="secondary"
+            onClick={() =>
+              run(async () => {
+                const { config: c } = await clubApi.saveConfig({
+                  cardNumber: form.cardNumber,
+                  cardName: form.cardName,
+                  adminPass: form.newAdmin,
+                });
+                setConfig(c);
+                toast.success("تنظیمات ذخیره شد");
+              })
+            }
+          >
+            ذخیره تنظیمات
+          </Button>
+          <h2 className="mt-8 text-sm text-muted">در انتظار تأیید</h2>
+          <ul className="mt-3 space-y-2">
+            {pending.length === 0 && <p className="text-sm text-muted">موردی نیست.</p>}
+            {pending.map((t) => (
+              <li key={t.id} className="rounded-lg border border-border bg-surface p-4">
+                <p className="text-sm">
+                  {kindFa(t.kind)} · {faNum(t.chips)} ژتون · {faNum(t.toman)} تومان
+                </p>
+                <p className="mt-1 text-xs text-muted">{t.note}</p>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    className="flex-1"
+                    onClick={() =>
+                      run(async () => {
+                        await clubApi.adminDecide(t.id, true);
+                        setPending((xs) => xs.filter((x) => x.id !== t.id));
+                        toast.success("تأیید شد");
+                      })
+                    }
+                  >
+                    تأیید
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() =>
+                      run(async () => {
+                        await clubApi.adminDecide(t.id, false);
+                        setPending((xs) => xs.filter((x) => x.id !== t.id));
+                      })
+                    }
+                  >
+                    رد
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <h2 className="mt-8 text-sm text-muted">اعضا</h2>
+          <ul className="mt-3 space-y-2">
+            {adminUsers.map((u) => (
+              <li key={u.id} className="rounded-lg border border-border bg-surface px-4 py-3">
+                <div className="flex justify-between text-sm">
+                  <span>{u.username}</span>
+                  <span className="tabular-nums text-chip">{faNum(u.chips)}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted" dir="ltr">
+                  {u.phone}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </main>
+      )}
+    </div>
+  );
+}
+
+function Back({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="mb-4 flex h-11 items-center gap-1 text-sm text-muted" onClick={onClick}>
+      <ArrowRight className="size-4" /> لابی
+    </button>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface px-3 py-3">
+      <p className="text-xs text-muted">{label}</p>
+      <p className="mt-1 text-sm tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+function kindFa(k: Tx["kind"]) {
+  switch (k) {
+    case "deposit":
+      return "خرید";
+    case "cashout":
+      return "برداشت";
+    case "bonus":
+      return "جایزه";
+    case "win":
+      return "برد";
+    case "lose":
+      return "باخت";
+    default:
+      return k;
+  }
+}
+function statusFa(s: Tx["status"]) {
+  switch (s) {
+    case "pending":
+      return "در انتظار";
+    case "approved":
+      return "تأیید شده";
+    case "rejected":
+      return "رد شده";
+    default:
+      return "انجام شد";
+  }
+}

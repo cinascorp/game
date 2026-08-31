@@ -1,0 +1,49 @@
+export interface ClubUser {
+  id: string;
+  username: string;
+  phone: string;
+  password?: string;
+  chips: number;
+  cashable: number;
+  depositedToman: number;
+  cashedToman: number;
+}
+
+export interface Tx {
+  id: string;
+  userId: string;
+  kind: "deposit" | "cashout" | "bonus" | "win" | "lose" | "rake";
+  chips: number;
+  toman: number;
+  status: "pending" | "approved" | "rejected" | "done";
+  note: string;
+  createdAt: number;
+  packId?: string;
+}
+
+export interface ClubConfig {
+  cardNumber: string;
+  cardName: string;
+  adminPass: string;
+}
+
+export interface ClubStats {
+  users: number;
+  pendingDeposits: number;
+  pendingCashouts: number;
+  depositedToman: number;
+  cashedToman: number;
+  rakeChips: number;
+}
+
+export interface AdminQueue {
+  pending: Tx[];
+  users: ClubUser[];
+  config: ClubConfig;
+  stats: ClubStats;
+}
+
+export interface AuthPayload {
+  token: string;
+  user: ClubUser;
+}

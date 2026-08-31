@@ -1,0 +1,97 @@
+export const WELCOME_CHIPS = 5_000;
+export const DAILY_BONUS = 500;
+export const RAKE_BPS = 500;
+export const CASHOUT_FEE_BPS = 800;
+export const SELL_TOMAN_PER_1000 = 4_000;
+export const MIN_CASHOUT_CHIPS = 10_000;
+export const WIN_CASHABLE_BPS = 3_000;
+export const DAILY_CASHOUT_CAP = 80_000;
+export const CASHOUT_MAX_MULTIPLIER = 2;
+
+export const PACKAGES = [
+  { id: "p1", label: "شروع", chips: 10_000, bonus: 0, toman: 50_000 },
+  { id: "p2", label: "نقره‌ای", chips: 50_000, bonus: 8_000, toman: 200_000 },
+  { id: "p3", label: "طلایی", chips: 120_000, bonus: 25_000, toman: 400_000 },
+  { id: "p4", label: "الماس", chips: 350_000, bonus: 90_000, toman: 1_000_000 },
+  { id: "p5", label: "رویال", chips: 800_000, bonus: 280_000, toman: 2_000_000 },
+] as const;
+
+export const TABLES = [
+  {
+    id: "micro",
+    name: "میکرو",
+    tag: "تمرین",
+    sb: 25,
+    bb: 50,
+    min: 1_500,
+    max: 8_000,
+    seats: 6,
+  },
+  {
+    id: "low",
+    name: "پایین",
+    tag: "پررفت‌وآمد",
+    sb: 100,
+    bb: 200,
+    min: 6_000,
+    max: 40_000,
+    seats: 6,
+  },
+  {
+    id: "turbo",
+    name: "توربو",
+    tag: "پات سریع",
+    sb: 250,
+    bb: 500,
+    min: 16_000,
+    max: 80_000,
+    seats: 6,
+  },
+  {
+    id: "mid",
+    name: "متوسط",
+    tag: "باشگاه",
+    sb: 500,
+    bb: 1_000,
+    min: 40_000,
+    max: 200_000,
+    seats: 6,
+  },
+  {
+    id: "high",
+    name: "های‌رولر",
+    tag: "وی‌آی‌پی",
+    sb: 2_500,
+    bb: 5_000,
+    min: 200_000,
+    max: 1_000_000,
+    seats: 6,
+  },
+] as const;
+
+export const DEFAULT_SERVER = "http://37.98.111.233:8080";
+export const DEFAULT_CARD_NUMBER = "XXXX-XXXX-XXXX-XXXX";
+export const DEFAULT_CARD_NAME = "مدیر باشگاه آس کلاب";
+
+export function rakeAmount(pot: number, bb: number): number {
+  const raw = Math.floor((pot * RAKE_BPS) / 10_000);
+  const cap = bb * 10;
+  return Math.min(raw, cap, Math.max(0, pot - 1));
+}
+
+export function cashoutToman(chips: number): { gross: number; fee: number; net: number } {
+  const gross = Math.floor((chips / 1000) * SELL_TOMAN_PER_1000);
+  const fee = Math.floor((gross * CASHOUT_FEE_BPS) / 10_000);
+  return { gross, fee, net: gross - fee };
+}
+
+export function packageTotal(id: string) {
+  const pack = PACKAGES.find((p) => p.id === id);
+  if (!pack) return null;
+  return { ...pack, total: pack.chips + pack.bonus };
+}
+
+export function winCashable(delta: number) {
+  if (delta <= 0) return 0;
+  return Math.floor((delta * WIN_CASHABLE_BPS) / 10_000);
+}

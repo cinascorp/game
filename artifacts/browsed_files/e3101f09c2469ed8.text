@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0c0f0d" />
+  <title>آس کلاب</title>
+  <style>
+    :root {
+      --bg:#0c0f0d; --surface:#141a17; --surface-2:#1c2420; --fg:#efe8d8; --muted:#9aa396;
+      --accent:#e8dcc4; --accent-fg:#14110c; --felt:#1a4a38; --felt-deep:#0e2a20;
+      --danger:#b4453a; --win:#3d9a6a; --card:#f7f3ea; --card-red:#b42318; --card-ink:#1a1a1a;
+      --border:#2a332e; --chip:#c4a574;
+    }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100dvh; background:var(--bg); color:var(--fg); font-family:Tahoma,Vazirmatn,sans-serif; }
+    button { font:inherit; color:inherit; cursor:pointer; }
+    input { font:inherit; }
+    h1 { font-weight:600; letter-spacing:-.02em; margin:0; }
+    .wrap { max-width:480px; margin:0 auto; min-height:100dvh; padding:16px 16px calc(24px + env(safe-area-inset-bottom)); }
+    .row { display:flex; gap:8px; align-items:center; }
+    .between { display:flex; justify-content:space-between; align-items:center; }
+    .btn { height:44px; border:0; border-radius:12px; padding:0 16px; background:var(--accent); color:var(--accent-fg); width:100%; }
+    .btn.sec { background:var(--surface-2); color:var(--fg); border:1px solid var(--border); }
+    .btn.ghost { background:transparent; color:var(--fg); }
+    .btn:disabled { opacity:.4; }
+    .inp { height:44px; width:100%; border-radius:12px; border:1px solid var(--border); background:var(--surface); color:var(--fg); padding:0 12px; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; }
+    .muted { color:var(--muted); font-size:13px; line-height:1.6; }
+    .chip { color:var(--chip); font-variant-numeric:tabular-nums; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .hide { display:none !important; }
+    .pc { width:48px; height:68px; border-radius:6px; background:var(--card); color:var(--card-ink); display:flex; flex-direction:column; justify-content:space-between; padding:4px; font-size:12px; font-weight:700; flex-shrink:0; }
+    .pc.red { color:var(--card-red); }
+    .pc.back { background:var(--felt-deep); border:1px solid var(--chip); }
+    .pc.sm { width:28px; height:40px; font-size:9px; }
+    .felt-wrap { position:relative; height:min(52dvh, 22rem); margin:8px 0; }
+    .felt-outer { position:absolute; inset:8%; border-radius:50%; background:var(--felt-deep); border:1px solid rgba(196,165,116,.25); }
+    .felt-inner { position:absolute; inset:11%; border-radius:50%; background:var(--felt); }
+    .seat { position:absolute; width:74px; transform:translate(-50%,-50%); background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:6px; }
+    .seat.on { border-color:var(--accent); }
+    .seat.out { opacity:.4; }
+    .toast { position:fixed; top:16px; left:50%; transform:translateX(-50%); background:var(--surface); border:1px solid var(--border); padding:10px 16px; border-radius:12px; z-index:9; }
+    .tabs { display:flex; background:var(--surface); border-radius:14px; padding:4px; }
+    .tabs button { flex:1; height:40px; border:0; border-radius:10px; background:transparent; }
+    .tabs button.on { background:var(--surface-2); }
+    .dot { width:6px; height:6px; border-radius:50%; background:var(--muted); display:inline-block; }
+    .dot.on { background:var(--win); }
+  </style>
+</head>
+<body>
+  <div id="toast" class="toast hide"></div>
+  <div id="app"></div>
+  <script>
+  const DEFAULT_SERVER = "http://37.98.111.233:8080";
+  const PACKS = [
+    {id:"p1",label:"شروع",chips:10000,bonus:0,toman:50000},
+    {id:"p2",label:"نقره‌ای",chips:50000,bonus:8000,toman:200000},
+    {id:"p3",label:"طلایی",chips:120000,bonus:25000,toman:400000},
+    {id:"p4",label:"الماس",chips:350000,bonus:90000,toman:1000000},
+    {id:"p5",label:"رویال",chips:800000,bonus:280000,toman:2000000}
+  ];
+  const TABLES = [
+    {id:"micro",name:"میکرو",tag:"تمرین",sb:25,bb:50,min:1500,max:8000},
+    {id:"low",name:"پایین",tag:"پررفت‌وآمد",sb:100,bb:200,min:6000,max:40000},
+    {id:"turbo",name:"توربو",tag:"پات سریع",sb:250,bb:500,min:16000,max:80000},
+    {id:"mid",name:"متوسط",tag:"باشگاه",sb:500,bb:1000,min:40000,max:200000},
+    {id:"high",name:"های‌رولر",tag:"وی‌آی‌پی",sb:2500,bb:5000,min:200000,max:1000000}
+  ];
+  const BOTS = [["رضا","tight"],["سارا","loose"],["نیما","aggro"],["مهسا","station"],["کامران","maniac"]];
+  const RN=["2","3","4","5","6","7","8","9","10","J","Q","K","A"];
+  const SU=["♠","♥","♦","♣"];
+  const HN=["کارت بالا","جفت","دو جفت","سه مشابه","استریت","فلاش","فول هاوس","چهار مشابه","استریت فلاش","رویال فلاش"];
+  const SEATS=[{l:"16%",t:"14%"},{l:"50%",t:"4%"},{l:"84%",t:"14%"},{l:"10%",t:"52%"},{l:"90%",t:"52%"}];
+  const fa = n => new Intl.NumberFormat("fa-IR").format(Math.floor(n||0));
+  const uid = p => p+"_"+Math.random().toString(16).slice(2)+Date.now().toString(16).slice(-4);
+  const KEY="aceclub.apk.v2";
+  let S = { view:"splash", user:null, token:null, admin:null, online:false, table:null, buyin:0, config:{cardNumber:"XXXX-XXXX-XXXX-XXXX",cardName:"مدیر باشگاه آس کلاب"}, txs:[], pending:[], users:[], stats:{}, form:{} };
+
+  function server(){ return (localStorage.getItem("aceclub.server")||DEFAULT_SERVER).replace(/\/$/,""); }
+  function db(){ try{ return Object.assign({users:[],tx:[],cfg:{cardNumber:"XXXX-XXXX-XXXX-XXXX",cardName:"مدیر باشگاه آس کلاب",adminPass:"aceclub"},daily:{},sessions:[],rake:0}, JSON.parse(localStorage.getItem(KEY)||"{}")); }catch{ return {users:[],tx:[],cfg:{cardNumber:"XXXX-XXXX-XXXX-XXXX",cardName:"مدیر باشگاه آس کلاب",adminPass:"aceclub"},daily:{},sessions:[],rake:0}; } }
+  function saveDb(d){ localStorage.setItem(KEY, JSON.stringify(d)); }
+  function toast(m){ const el=document.getElementById("toast"); el.textContent=m; el.classList.remove("hide"); setTimeout(()=>el.classList.add("hide"),2200); }
+  function pub(u){ return {id:u.id,username:u.username,phone:u.phone,chips:u.chips,cashable:u.cashable,depositedToman:u.depositedToman||0,cashedToman:u.cashedToman||0}; }
+  function money(chips){ const g=Math.floor(chips/1000*4000), f=Math.floor(g*0.08); return {gross:g,fee:f,net:g-f}; }
+
+  async function api(op, payload, asAdmin){
+    const token = asAdmin ? (S.admin||localStorage.getItem("aceclub.admin")) : (S.token||localStorage.getItem("aceclub.token"));
+    try{
+      const res = await fetch(server()+"/api/club",{method:"POST",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify({op,...payload})});
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error||"خطای سرور");
+      S.online=true; return data;
+    }catch(e){
+      if(e.message && e.message!=="Failed to fetch" && !/Network|Load/i.test(e.message) && e.name!=="TypeError") throw e;
+      S.online=false; return localOp(op, payload||{});
+    }
+  }
+  function localOp(op, b){
+    const d=db();
+    const byTok=()=>{ const tok=S.token||localStorage.getItem("aceclub.token"); const s=d.sessions.find(x=>x.token===tok); const u=d.users.find(x=>x.id===(s?s.userId:localStorage.getItem("aceclub.uid"))); if(!u) throw new Error("وارد نشده‌اید."); return u; };
+    if(op==="config") return {cardNumber:d.cfg.cardNumber,cardName:d.cfg.cardName,adminPass:""};
+    if(op==="register"){
+      if(d.users.some(u=>u.username===b.username)) throw new Error("این نام کاربری قبلاً ثبت شده.");
+      const u={id:uid("u"),username:b.username,phone:b.phone,password:b.password,chips:5000,cashable:0,depositedToman:0,cashedToman:0};
+      d.users.push(u); const token=uid("tok"); d.sessions.push({token,userId:u.id}); saveDb(d);
+      localStorage.setItem("aceclub.token",token); localStorage.setItem("aceclub.uid",u.id);
+      return {token,user:pub(u)};
+    }
+    if(op==="login"){
+      const u=d.users.find(x=>x.username===b.username && x.password===b.password); if(!u) throw new Error("نام کاربری یا رمز نادرست است.");
+      const token=uid("tok"); d.sessions.push({token,userId:u.id}); saveDb(d);
+      localStorage.setItem("aceclub.token",token); localStorage.setItem("aceclub.uid",u.id); return {token,user:pub(u)};
+    }
+    const u=byTok();
+    if(op==="me") return pub(u);
+    if(op==="delta"){ u.chips=Math.max(0,u.chips+(b.delta|0)); if(b.delta>0) u.cashable+=Math.floor(b.delta*0.3); u.cashable=Math.min(u.cashable,u.chips); d.rake+=(b.rake|0); d.tx.push({id:uid("tx"),userId:u.id,kind:b.delta>=0?"win":"lose",chips:b.delta,toman:0,status:"done",note:b.note,createdAt:Date.now()}); saveDb(d); return pub(u); }
+    if(op==="deposit"){ const p=PACKS.find(x=>x.id===b.packId); if(!p) throw new Error("بسته نامعتبر."); const tx={id:uid("tx"),userId:u.id,kind:"deposit",chips:p.chips+p.bonus,toman:p.toman,status:"pending",note:"کد پیگیری: "+b.track+" · "+p.label,createdAt:Date.now(),packId:p.id}; d.tx.push(tx); saveDb(d); return tx; }
+    if(op==="cashout"){
+      const chips=b.chips|0; if(chips<10000) throw new Error("حداقل برداشت ۱۰٬۰۰۰ ژتون است."); if(chips>u.cashable) throw new Error("ژتون قابل‌برداشت کافی نیست.");
+      const m=money(chips); if((u.cashedToman||0)+m.net > (u.depositedToman||0)*2) throw new Error("سقف برداشت نسبت به واریزی‌ها پر شده. اول ژتون بخرید.");
+      u.chips-=chips; u.cashable-=chips; const tx={id:uid("tx"),userId:u.id,kind:"cashout",chips:-chips,toman:m.net,status:"pending",note:"کارت مقصد: "+b.card,createdAt:Date.now()}; d.tx.push(tx); saveDb(d); return {tx,user:pub(u),money:m};
+    }
+    if(op==="daily"){ const today=new Date().toISOString().slice(0,10); if(d.daily[u.id]===today) throw new Error("جایزه امروز را گرفته‌اید."); u.chips+=500; d.daily[u.id]=today; saveDb(d); return pub(u); }
+    if(op==="history") return d.tx.filter(t=>t.userId===u.id).sort((a,b)=>b.createdAt-a.createdAt);
+    if(op==="adminLogin"){ if(b.password!==d.cfg.adminPass) throw new Error("رمز مدیریت نادرست است."); const token=uid("adm"); d.sessions.push({token,userId:"__admin__"}); saveDb(d); return {ok:true,token}; }
+    if(op==="adminQueue") return {pending:d.tx.filter(t=>t.status==="pending"), users:d.users.map(pub), config:{cardNumber:d.cfg.cardNumber,cardName:d.cfg.cardName,adminPass:""}, stats:{users:d.users.length,pendingDeposits:d.tx.filter(t=>t.kind==="deposit"&&t.status==="pending").length,pendingCashouts:d.tx.filter(t=>t.kind==="cashout"&&t.status==="pending").length,depositedToman:d.users.reduce((s,x)=>s+(x.depositedToman||0),0),cashedToman:d.users.reduce((s,x)=>s+(x.cashedToman||0),0),rakeChips:d.rake||0}};
+    if(op==="adminDecide"){ const tx=d.tx.find(t=>t.id===b.txId); const uu=d.users.find(x=>x.id===tx.userId); if(tx.kind==="deposit"){ if(b.approve){ const p=PACKS.find(x=>x.id===tx.packId); uu.chips+=tx.chips; uu.cashable+=p?p.chips:tx.chips; uu.depositedToman=(uu.depositedToman||0)+tx.toman; tx.status="approved"; } else tx.status="rejected"; } else if(tx.kind==="cashout"){ if(b.approve){ uu.cashedToman=(uu.cashedToman||0)+tx.toman; tx.status="approved"; } else { uu.chips+=Math.abs(tx.chips); uu.cashable+=Math.abs(tx.chips); tx.status="rejected"; } } saveDb(d); return tx; }
+    if(op==="saveConfig"){ if(b.cardNumber) d.cfg.cardNumber=b.cardNumber; if(b.cardName) d.cfg.cardName=b.cardName; if(b.adminPass) d.cfg.adminPass=b.adminPass; saveDb(d); return {cardNumber:d.cfg.cardNumber,cardName:d.cfg.cardName,adminPass:""}; }
+    throw new Error("عملیات ناشناخته.");
+  }
+
+  function eval5(cards){
+    const ranks=cards.map(c=>c%13).sort((a,b)=>b-a); const suits=cards.map(c=>Math.floor(c/13));
+    const counts=Array(13).fill(0); ranks.forEach(r=>counts[r]++);
+    const flush=suits.every(s=>s===suits[0]); const uniq=[...new Set(ranks)].sort((a,b)=>b-a);
+    let sh=-1; if(uniq.length===5){ if(uniq[0]-uniq[4]===4) sh=uniq[0]; else if(uniq[0]===12&&uniq[1]===3&&uniq[2]===2&&uniq[3]===1&&uniq[4]===0) sh=3; }
+    const g=counts.map((n,r)=>({n,r})).filter(x=>x.n).sort((a,b)=>b.n-a.n||b.r-a.r);
+    const pack=(cat,ks)=>{ const k=ks.slice(); while(k.length<5)k.push(0); return k.slice(0,5).reduce((s,x)=>s*13+x,cat); };
+    if(flush&&sh>=0) return pack(sh===12?9:8,[sh]);
+    if(g[0].n===4) return pack(7,[g[0].r,g[1].r]);
+    if(g[0].n===3&&g[1]&&g[1].n===2) return pack(6,[g[0].r,g[1].r]);
+    if(flush) return pack(5,ranks);
+    if(sh>=0) return pack(4,[sh]);
+    if(g[0].n===3) return pack(3,[g[0].r,g[1].r,g[2].r]);
+    if(g[0].n===2&&g[1]&&g[1].n===2) return pack(2,[g[0].r,g[1].r,g[2].r]);
+    if(g[0].n===2) return pack(1,[g[0].r,g[1].r,g[2].r,g[3].r]);
+    return pack(0,ranks);
+  }
+  function eval7(cards){ if(cards.length<=5) { const s=eval5(cards); return {score:s,cat:Math.floor(s/Math.pow(13,5))}; } const five=[]; const rec=(s,acc)=>{ if(acc.length===5){five.push(acc.slice());return;} for(let i=s;i<cards.length;i++){acc.push(cards[i]);rec(i+1,acc);acc.pop();} }; rec(0,[]); let best=-1; for(const c of five){ const s=eval5(c); if(s>best)best=s; } return {score:best,cat:Math.floor(best/Math.pow(13,5))}; }
+  function deck(){ const d=[...Array(52).keys()]; for(let i=51;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [d[i],d[j]]=[d[j],d[i]]; } return d; }
+  function pc(c, hidden, sm){ const cls=sm?"pc sm":"pc"; if(hidden||c==null) return `<div class="${cls} back"></div>`; const r=c%13,s=Math.floor(c/13), red=s===1||s===2; return `<div class="${cls} ${red?"red":""}"><div>${RN[r]}${SU[s]}</div><div style="text-align:center">${SU[s]}</div></div>`; }
+
+  function startHand(t){
+    t=JSON.parse(JSON.stringify(t)); t.deck=deck(); t.board=[]; t.pot=0; t.winners=null; t.handOver=false; t.street="preflop"; t.currentBet=0; t.minRaise=t.bb; t.logs=[]; t.rakeTaken=0;
+    t.sessionRake=t.sessionRake||0;
+    t.players.forEach(p=>{ p.hole=[]; p.folded=p.stack<=0; p.allIn=false; p.bet=0; p.total=0; p.acted=false; });
+    const live=t.players.filter(p=>p.stack>0); if(live.length<2){ t.handOver=true; t.logs=["بازیکن کافی نیست"]; return t; }
+    const next=(from,pred)=>{ for(let i=1;i<=t.players.length;i++){ const idx=(from+i)%t.players.length; if(pred(t.players[idx])) return idx; } return from; };
+    t.button=next(t.button,p=>p.stack>0); const sb=next(t.button,p=>p.stack>0); const bb=next(sb,p=>p.stack>0);
+    const post=(i,a)=>{ const p=t.players[i]; const put=Math.min(a,p.stack); p.stack-=put; p.bet+=put; p.total+=put; t.pot+=put; if(!p.stack) p.allIn=true; };
+    post(sb,t.sb); post(bb,t.bb); t.currentBet=Math.max(t.players[sb].bet,t.players[bb].bet);
+    for(let r=0;r<2;r++) for(let i=0;i<t.players.length;i++){ const p=t.players[(t.button+1+i)%t.players.length]; if(!p.folded) p.hole.push(t.deck.pop()); }
+    t.toAct=next(bb,p=>!p.folded&&!p.allIn&&p.stack>0); return t;
+  }
+  function can(p){ return !p.folded && !p.allIn && p.stack>0; }
+  function apply(t, act){
+    t=JSON.parse(JSON.stringify(t)); const p=t.players[t.toAct]; if(!can(p)||t.handOver) return t;
+    const toCall=Math.max(0,t.currentBet-p.bet);
+    const put=(n)=>{ const x=Math.min(n,p.stack); p.stack-=x; p.bet+=x; p.total+=x; t.pot+=x; if(!p.stack) p.allIn=true; return x; };
+    if(act.type==="fold"){ p.folded=true; t.logs.push(p.name+" فولد"); }
+    else if(act.type==="check"){ if(toCall) return t; t.logs.push(p.name+" چک"); }
+    else if(act.type==="call"){ const x=put(toCall); t.logs.push(x?p.name+" کال "+x:p.name+" چک"); }
+    else if(act.type==="raise"){ const x=put(act.amount-p.bet); const nb=p.bet; const rs=nb-t.currentBet; if(nb>t.currentBet){ if(rs>=t.minRaise) t.minRaise=rs; t.currentBet=nb; t.players.forEach(o=>{ if(o!==p && can(o)) o.acted=false; }); } t.logs.push(p.name+" رِیز تا "+nb); }
+    else if(act.type==="allin") return apply(t,{type:"raise",amount:p.bet+p.stack});
+    p.acted=true;
+    const alive=t.players.filter(x=>!x.folded);
+    if(alive.length<=1) return settle(t);
+    const actors=t.players.filter(can);
+    const over=!actors.length || actors.every(x=>x.acted && x.bet===t.currentBet);
+    if(over) return street(t);
+    const n=t.players.length; for(let i=1;i<=n;i++){ const idx=(t.toAct+i)%n; if(can(t.players[idx])){ t.toAct=idx; break; } }
+    return t;
+  }
+  function street(t){
+    const alive=t.players.filter(p=>!p.folded); if(alive.length<=1) return settle(t);
+    t.players.forEach(p=>{ p.bet=0; p.acted=false; }); t.currentBet=0; t.minRaise=t.bb;
+    if(t.street==="preflop"){ t.deck.pop(); t.board.push(t.deck.pop(),t.deck.pop(),t.deck.pop()); t.street="flop"; }
+    else if(t.street==="flop"){ t.deck.pop(); t.board.push(t.deck.pop()); t.street="turn"; }
+    else if(t.street==="turn"){ t.deck.pop(); t.board.push(t.deck.pop()); t.street="river"; }
+    else return settle(t);
+    if(t.players.filter(can).length<2) return street(t);
+    const n=t.players.length; for(let i=1;i<=n;i++){ const idx=(t.button+i)%n; if(can(t.players[idx])){ t.toAct=idx; break; } }
+    return t;
+  }
+  function settle(t){
+    t.street="showdown"; t.handOver=true; const alive=t.players.filter(p=>!p.folded);
+    const rake=Math.min(Math.floor(t.pot*0.05), t.bb*10, Math.max(0,t.pot-1));
+    t.sessionRake=(t.sessionRake||0)+rake;
+    if(alive.length===1){ const w=alive[0]; w.stack+=t.pot-rake; t.winners={ids:[w.id],amount:t.pot-rake,label:"برنده بدون شوداون"}; return t; }
+    const sc=alive.map(p=>({p,...eval7(p.hole.concat(t.board))})).sort((a,b)=>b.score-a.score);
+    const best=sc[0].score; const w=sc.filter(x=>x.score===best).map(x=>x.p); const award=t.pot-rake; const share=Math.floor(award/w.length);
+    w.forEach(x=>x.stack+=share); t.winners={ids:w.map(x=>x.id),amount:award,label:HN[sc[0].cat]||"دست برتر"}; return t;
+  }
+  function botAct(t){
+    const p=t.players[t.toAct]; const toCall=Math.max(0,t.currentBet-p.bet);
+    const str = t.street==="preflop" ? Math.min(1, (Math.max(p.hole[0]%13,p.hole[1]%13)+ (p.hole[0]%13===p.hole[1]%13?6:0))/18) : eval7(p.hole.concat(t.board)).cat/9;
+    if(toCall===0 && str<0.35) return {type:"check"};
+    if(str>0.7){ if(p.stack>toCall) return {type:"raise", amount: Math.min(p.bet+p.stack, t.currentBet+Math.max(t.minRaise, Math.floor(t.pot*0.7)))}; return {type:"call"}; }
+    if(toCall && str>0.28) return {type:"call"};
+    if(toCall===0) return {type:"check"};
+    return {type:"fold"};
+  }
+
+  function head(){
+    const u=S.user;
+    return `<div class="between" style="padding-top:env(safe-area-inset-top)"><button class="btn ghost" style="width:auto" id="home">♠ آس کلاب</button><div class="row"><span class="dot ${S.online?"on":""}"></span><div class="chip">${fa(u.chips)}</div></div></div>`;
+  }
+
+  function render(){
+    const app=document.getElementById("app");
+    if(S.view==="splash"){ app.innerHTML=`<div class="wrap" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center"><div style="font-size:40px">♠</div><h1>آس کلاب</h1><p class="muted">باشگاه تگزاس هولدم</p></div>`; return; }
+    if(S.view==="table" && S.table){ renderTable(); return; }
+    if(S.view==="auth"){
+      app.innerHTML=`<div class="wrap" style="display:flex;flex-direction:column;justify-content:center"><div style="font-size:28px">♠</div><h1>آس کلاب</h1><p class="muted">ورود و عضویت روی سرور باشگاه</p>
+        <div class="tabs" style="margin-top:24px"><button id="tL" class="on">ورود</button><button id="tR">عضویت</button></div>
+        <form id="af" style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
+          <input class="inp" id="user" placeholder="نام کاربری" />
+          <input class="inp hide" id="phone" placeholder="09xxxxxxxxx" inputmode="numeric" />
+          <input class="inp" id="pass" type="password" placeholder="رمز" />
+          <button class="btn" id="go">ورود</button>
+        </form>
+        <p class="muted" style="margin-top:16px">با عضویت ۵٬۰۰۰ ژتون تمرینی می‌گیرید. خرید و برداشت از طریق سرور انجام می‌شود.</p></div>`;
+      let mode="login";
+      document.getElementById("tL").onclick=()=>{mode="login";document.getElementById("tL").classList.add("on");document.getElementById("tR").classList.remove("on");document.getElementById("phone").classList.add("hide");document.getElementById("go").textContent="ورود";};
+      document.getElementById("tR").onclick=()=>{mode="register";document.getElementById("tR").classList.add("on");document.getElementById("tL").classList.remove("on");document.getElementById("phone").classList.remove("hide");document.getElementById("go").textContent="ساخت حساب";};
+      document.getElementById("af").onsubmit=async e=>{ e.preventDefault(); try{ const body={username:user.value.trim(), phone:phone.value.trim(), password:pass.value}; const r= mode==="register"? await api("register",body): await api("login",body); localStorage.setItem("aceclub.token", r.token); S.token=r.token; S.user=r.user; S.view="lobby"; toast(S.online?"متصل به سرور":"حالت محلی"); render(); }catch(err){ toast(err.message); } };
+      return;
+    }
+    const u=S.user;
+    if(S.view==="lobby"){
+      app.innerHTML=`<div class="wrap">${head()}<div class="card" style="margin-top:12px"><div class="muted">موجودی ژتون</div><div style="font-size:32px;font-variant-numeric:tabular-nums">${fa(u.chips)}</div><div class="muted">قابل برداشت ${fa(u.cashable)} · ${u.username}</div>
+        <div class="grid2" style="margin-top:12px"><button class="btn" id="shop">خرید ژتون</button><button class="btn sec" id="cash">فروش ژتون</button></div></div>
+        <div class="grid2" style="margin-top:10px;grid-template-columns:1fr 1fr 1fr"><button class="btn sec" id="daily">روزانه</button><button class="btn sec" id="hist">گردش</button><button class="btn sec" id="set">تنظیمات</button></div>
+        <p class="muted" style="margin:20px 0 8px">میزهای نقدی</p>
+        ${TABLES.map(t=>`<button class="card" style="width:100%;text-align:right;margin-bottom:8px;opacity:${u.chips<t.min?0.5:1}" data-t="${t.id}"><div class="between"><div><b>${t.name}</b><div class="muted">${t.tag} · ${fa(t.sb)}/${fa(t.bb)}</div></div><div class="muted">ورود ${fa(t.min)}</div></div></button>`).join("")}
+        <p class="muted">بازی روی دستگاه اجرا می‌شود. فقط ورود، خرید، برداشت و نتیجه میز با سرور همگام می‌شود.</p>
+      </div>`;
+      home.onclick=()=>{S.view="lobby";render();};
+      shop.onclick=()=>{S.view="shop";render();};
+      cash.onclick=()=>{S.view="cashout";render();};
+      set.onclick=()=>{S.view="settings";render();};
+      daily.onclick=async()=>{ try{ S.user=await api("daily",{}); toast("جایزه روزانه واریز شد"); render(); }catch(e){ toast(e.message);} };
+      hist.onclick=async()=>{ S.txs=await api("history",{}); S.view="wallet"; render(); };
+      app.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>sit(b.dataset.t));
+      return;
+    }
+    if(S.view==="shop"){
+      app.innerHTML=`<div class="wrap">${head()}<button class="btn ghost" id="back" style="width:auto">بازگشت</button><h1>خرید ژتون</h1><p class="muted">مبلغ را کارت‌به‌کارت کنید و کد پیگیری را بفرستید.</p>
+        <div class="card"><div class="muted">شماره کارت باشگاه</div><div class="between"><div dir="ltr">${S.config.cardNumber}</div><button class="btn ghost" id="cp" style="width:auto">کپی</button></div><div class="muted">${S.config.cardName}</div></div>
+        <div id="packs" style="margin-top:10px">${PACKS.map(p=>`<button class="card" style="width:100%;margin-bottom:8px;text-align:right" data-p="${p.id}"><div class="between"><div>${p.label}<div class="muted">${fa(p.chips)} ژتون${p.bonus?" + "+fa(p.bonus)+" هدیه":""}</div></div><div>${fa(p.toman)} تومان</div></div></button>`).join("")}</div>
+        <input class="inp" id="track" placeholder="کد پیگیری" /><button class="btn" id="pay" style="margin-top:10px">ثبت واریز</button></div>`;
+      let packId="p1"; back.onclick=()=>{S.view="lobby";render();}; home.onclick=back.onclick;
+      cp.onclick=()=>{ navigator.clipboard&&navigator.clipboard.writeText((S.config.cardNumber||"").replace(/\s/g,"")); toast("کپی شد"); };
+      app.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>packId=b.dataset.p);
+      pay.onclick=async()=>{ try{ await api("deposit",{packId,track:track.value.trim()}); toast("درخواست ثبت شد"); S.view="lobby"; render(); }catch(e){ toast(e.message);} };
+      return;
+    }
+    if(S.view==="cashout"){
+      app.innerHTML=`<div class="wrap">${head()}<button class="btn ghost" id="back" style="width:auto">بازگشت</button><h1>فروش ژتون</h1><p class="muted">هر ۱۰۰۰ ژتون = ۴٬۰۰۰ تومان، کارمزد ۸٪. قابل برداشت ${fa(u.cashable)}</p>
+        <input class="inp" id="ch" value="10000" inputmode="numeric" /><p class="muted" id="est"></p>
+        <input class="inp" id="card" placeholder="شماره کارت شما" dir="ltr" /><button class="btn" id="go" style="margin-top:10px">ثبت برداشت</button></div>`;
+      const estEl=document.getElementById("est"); const est=()=>{ const n=+ch.value||0,m=money(n); estEl.textContent="خالص "+fa(m.net)+" تومان"; };
+      ch.oninput=est; est();
+      back.onclick=()=>{S.view="lobby";render();}; home.onclick=back.onclick;
+      go.onclick=async()=>{ try{ const r=await api("cashout",{chips:+ch.value,card:card.value.trim()}); S.user=r.user; toast("درخواست برداشت ثبت شد"); S.view="lobby"; render(); }catch(e){ toast(e.message);} };
+      return;
+    }
+    if(S.view==="wallet"){
+      app.innerHTML=`<div class="wrap">${head()}<button class="btn ghost" id="back" style="width:auto">بازگشت</button><h1>گردش حساب</h1>${(S.txs||[]).map(t=>`<div class="card" style="margin-top:8px"><div class="between"><span>${t.kind}</span><span class="chip">${fa(t.chips)}</span></div><div class="muted">${t.status} · ${t.note||""}</div></div>`).join("")||'<p class="muted">خالی</p>'}</div>`;
+      back.onclick=()=>{S.view="lobby";render();}; home.onclick=back.onclick; return;
+    }
+    if(S.view==="settings"){
+      app.innerHTML=`<div class="wrap">${head()}<button class="btn ghost" id="back" style="width:auto">بازگشت</button><h1>تنظیمات</h1>
+        <input class="inp" id="sv" dir="ltr" value="${server()}" /><button class="btn sec" id="ts" style="margin-top:8px">ذخیره و تست اتصال</button>
+        <div class="card" style="margin-top:16px"><b>پنل مدیریت</b><input class="inp" id="ap" type="password" placeholder="رمز مدیریت" style="margin-top:8px" /><button class="btn sec" id="al" style="margin-top:8px">ورود مدیریت</button><p class="muted">رمز پیش‌فرض aceclub</p></div>
+        <button class="btn ghost" id="out" style="margin-top:16px">خروج از حساب</button></div>`;
+      back.onclick=()=>{S.view="lobby";render();}; home.onclick=back.onclick;
+      ts.onclick=async()=>{ localStorage.setItem("aceclub.server", sv.value.replace(/\/$/,"")); try{ const r=await fetch(server()+"/api/club"); S.online=r.ok; toast(r.ok?"سرور در دسترس است":"سرور در دسترس نیست"); }catch{ S.online=false; toast("سرور در دسترس نیست"); } render(); };
+      al.onclick=async()=>{ try{ const r=await api("adminLogin",{password:ap.value}); S.admin=r.token; localStorage.setItem("aceclub.admin", r.token); const q=await api("adminQueue",{},true); S.pending=q.pending; S.config=q.config; S.stats=q.stats||{}; S.users=q.users||[]; S.view="admin"; render(); }catch(e){ toast(e.message);} };
+      out.onclick=()=>{ localStorage.removeItem("aceclub.token"); S.user=null; S.token=null; S.view="auth"; render(); };
+      return;
+    }
+    if(S.view==="admin"){
+      const st=S.stats||{};
+      app.innerHTML=`<div class="wrap">${head()}<button class="btn ghost" id="back" style="width:auto">بازگشت</button><h1>مدیریت</h1>
+        <div class="grid2" style="margin-top:12px"><div class="card"><div class="muted">اعضا</div>${fa(st.users||0)}</div><div class="card"><div class="muted">رِیک</div>${fa(st.rakeChips||0)}</div><div class="card"><div class="muted">واریزی</div>${fa(st.depositedToman||0)} ت</div><div class="card"><div class="muted">پرداختی</div>${fa(st.cashedToman||0)} ت</div></div>
+        <p class="muted">سود از رِیک ۵٪، اختلاف خرید/فروش ژتون و کارمزد ۸٪ برداشت.</p>
+        <input class="inp" id="cn" value="${S.config.cardNumber||""}" dir="ltr" /><input class="inp" id="cm" value="${S.config.cardName||""}" style="margin-top:8px" />
+        <input class="inp" id="np" type="password" placeholder="رمز جدید مدیریت" style="margin-top:8px" />
+        <button class="btn sec" id="svb" style="margin-top:8px">ذخیره</button>
+        <p class="muted" style="margin-top:16px">در انتظار تأیید</p>
+        ${(S.pending||[]).map(t=>`<div class="card" style="margin-top:8px"><div>${t.kind} · ${fa(t.chips)} · ${fa(t.toman)} تومان</div><div class="muted">${t.note}</div><div class="grid2" style="margin-top:8px"><button class="btn" data-ok="${t.id}">تأیید</button><button class="btn sec" data-no="${t.id}">رد</button></div></div>`).join("")||'<p class="muted">موردی نیست</p>'}</div>`;
+      back.onclick=()=>{S.view="lobby";render();}; home.onclick=back.onclick;
+      svb.onclick=async()=>{ S.config=await api("saveConfig",{cardNumber:cn.value,cardName:cm.value,adminPass:np.value},true); toast("ذخیره شد"); };
+      app.querySelectorAll("[data-ok]").forEach(b=>b.onclick=async()=>{ await api("adminDecide",{txId:b.dataset.ok,approve:true},true); S.pending=S.pending.filter(x=>x.id!==b.dataset.ok); render(); });
+      app.querySelectorAll("[data-no]").forEach(b=>b.onclick=async()=>{ await api("adminDecide",{txId:b.dataset.no,approve:false},true); S.pending=S.pending.filter(x=>x.id!==b.dataset.no); render(); });
+      return;
+    }
+  }
+
+  function sit(id){
+    const meta=TABLES.find(t=>t.id===id); if(S.user.chips<meta.min){ toast("ژتون کافی نیست"); return; }
+    const stack=Math.min(S.user.chips, meta.max, Math.max(meta.min, meta.bb*80));
+    S.buyin=stack; S.user.chips-=stack; S.user.cashable=Math.min(S.user.cashable,S.user.chips);
+    const players=[{id:"hero",name:S.user.username,isHero:true,isBot:false,stack,hole:[],folded:false,allIn:false,bet:0,total:0,acted:false,style:"tight"}];
+    BOTS.forEach((b,i)=>players.push({id:"bot"+i,name:b[0],isHero:false,isBot:true,stack:Math.floor(stack*(0.7+Math.random()*0.7)),hole:[],folded:false,allIn:false,bet:0,total:0,acted:false,style:b[1]}));
+    S.table=startHand({id,name:meta.name,sb:meta.sb,bb:meta.bb,players,button:0,street:"idle",board:[],deck:[],pot:0,toAct:0,currentBet:0,minRaise:meta.bb,logs:[],winners:null,handOver:false,sessionRake:0});
+    S.view="table"; render();
+  }
+  function leaveTable(){
+    const hero=S.table.players.find(p=>p.isHero); const delta=hero.stack-S.buyin;
+    S.user.chips+=hero.stack; if(delta>0) S.user.cashable+=Math.floor(delta*0.3); S.user.cashable=Math.min(S.user.cashable,S.user.chips);
+    api("delta",{delta,note:"میز "+S.table.name,rake:S.table.sessionRake||0}).then(u=>S.user=u).catch(()=>{});
+    S.table=null; S.view="lobby"; render();
+  }
+  function renderTable(){
+    const t=S.table, hero=t.players.find(p=>p.isHero), others=t.players.filter(p=>!p.isHero);
+    const actor=t.players[t.toAct], heroTurn=actor&&actor.isHero&&!t.handOver;
+    const toCall=Math.max(0,t.currentBet-hero.bet);
+    const app=document.getElementById("app");
+    const seats=others.map((p,i)=>{
+      const pos=SEATS[i]||SEATS[0];
+      const on=t.players[t.toAct]===p&&!t.handOver;
+      return `<div class="seat ${p.folded?"out":""} ${on?"on":""}" style="left:${pos.l};top:${pos.t}"><div>${p.name}</div><div class="muted">${fa(p.stack)}</div><div class="row" style="margin-top:4px">${t.handOver&&!p.folded?pc(p.hole[0],false,true)+pc(p.hole[1],false,true):pc(null,true,true)+pc(null,true,true)}</div>${p.bet?`<div class="chip">${fa(p.bet)}</div>`:""}</div>`;
+    }).join("");
+    app.innerHTML=`<div class="wrap" style="padding-bottom:8px">
+      <div class="between"><button class="btn ghost" id="leave" style="width:auto">ترک میز</button><div class="muted">${t.name} · ${fa(t.sb)}/${fa(t.bb)}</div><div class="chip">${fa(hero.stack)}</div></div>
+      <div class="felt-wrap"><div class="felt-outer"></div><div class="felt-inner"></div>${seats}
+        <div style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);text-align:center;z-index:2">
+          <div class="muted">پات ${fa(t.pot)}</div>
+          <div class="row" style="justify-content:center;margin-top:6px">${(t.board.length?t.board.map(c=>pc(c)).join(""):[0,1,2].map(()=>pc(null,true)).join(""))}</div>
+          ${t.winners?`<div class="muted" style="margin-top:6px">${t.winners.label} · ${fa(t.winners.amount)}</div>`:""}
+        </div>
+      </div>
+      <div class="between" style="margin-top:8px"><div class="row">${pc(hero.hole[0],!hero.hole.length)+pc(hero.hole[1],hero.hole.length<2)}</div><div class="muted">${t.logs.slice(-3).join("<br>")}</div></div>
+      <div id="acts" style="margin-top:12px"></div>
+    </div>`;
+    document.getElementById("leave").onclick=leaveTable;
+    const acts=document.getElementById("acts");
+    if(t.handOver){
+      acts.innerHTML=`<div class="grid2"><button class="btn sec" id="out">ترک میز</button><button class="btn" id="nx" ${hero.stack<t.bb?"disabled":""}>دست بعد</button></div>`;
+      document.getElementById("out").onclick=leaveTable; document.getElementById("nx").onclick=()=>{ S.table=startHand(t); render(); };
+    } else if(heroTurn){
+      const minR=Math.min(hero.bet+hero.stack, t.currentBet+t.minRaise);
+      acts.innerHTML=`<div class="grid2" style="grid-template-columns:1fr 1fr 1fr 1fr">
+        <button class="btn sec" id="f" ${toCall?"":"disabled"}>فولد</button>
+        <button class="btn sec" id="c">${toCall?"کال "+fa(Math.min(toCall,hero.stack)):"چک"}</button>
+        <button class="btn" id="r">رِیز</button>
+        <button class="btn sec" id="a">آل‌این</button></div>`;
+      f.onclick=()=>{S.table=apply(t,{type:"fold"});render();};
+      c.onclick=()=>{S.table=apply(t,{type:toCall?"call":"check"});render();};
+      r.onclick=()=>{S.table=apply(t,{type:"raise",amount:minR});render();};
+      a.onclick=()=>{S.table=apply(t,{type:"allin"});render();};
+    } else acts.innerHTML=`<p class="muted" style="text-align:center">نوبت حریف…</p>`;
+    if(!t.handOver && actor && actor.isBot){ setTimeout(()=>{ S.table=apply(S.table, botAct(S.table)); render(); }, 700+Math.random()*600); }
+  }
+
+  async function boot(){
+    render();
+    setTimeout(async()=>{
+      try{ S.config=await api("config",{}); }catch{}
+      const tok=localStorage.getItem("aceclub.token");
+      if(tok){ S.token=tok; try{ S.user=await api("me",{}); S.view="lobby"; }catch{ localStorage.removeItem("aceclub.token"); S.view="auth"; } }
+      else S.view="auth";
+      render();
+    },600);
+  }
+  boot();
+  </script>
+</body>
+</html>

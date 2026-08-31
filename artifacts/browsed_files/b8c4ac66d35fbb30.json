@@ -1,0 +1,306 @@
+[
+  {
+    "name": ".gitignore",
+    "path": ".gitignore",
+    "sha": "d218143954d25ff689dc8149c3111f970d497c04",
+    "size": 51,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/.gitignore?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/blob/main/.gitignore",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/blobs/d218143954d25ff689dc8149c3111f970d497c04",
+    "download_url": "https://raw.githubusercontent.com/cinascorp/poker/main/.gitignore",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/.gitignore?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/blobs/d218143954d25ff689dc8149c3111f970d497c04",
+      "html": "https://github.com/cinascorp/poker/blob/main/.gitignore"
+    }
+  },
+  {
+    "name": ".grok",
+    "path": ".grok",
+    "sha": "0da39b865ed14906b5785e229819353dee6dce8d",
+    "size": 0,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/.grok?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/tree/main/.grok",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/trees/0da39b865ed14906b5785e229819353dee6dce8d",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/.grok?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/trees/0da39b865ed14906b5785e229819353dee6dce8d",
+      "html": "https://github.com/cinascorp/poker/tree/main/.grok"
+    }
+  },
+  {
+    "name": ".node_modules.lock",
+    "path": ".node_modules.lock",
+    "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "size": 0,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/.node_modules.lock?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/blob/main/.node_modules.lock",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "download_url": "https://raw.githubusercontent.com/cinascorp/poker/main/.node_modules.lock",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/.node_modules.lock?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "html": "https://github.com/cinascorp/poker/blob/main/.node_modules.lock"
+    }
+  },
+  {
+    "name": ".prettierrc",
+    "path": ".prettierrc",
+    "sha": "bccee911b6b0dac9051d360fbc5e0a6303eed8fb",
+    "size": 90,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/.prettierrc?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/blob/main/.prettierrc",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/blobs/bccee911b6b0dac9051d360fbc5e0a6303eed8fb",
+    "download_url": "https://raw.githubusercontent.com/cinascorp/poker/main/.prettierrc",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/.prettierrc?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/blobs/bccee911b6b0dac9051d360fbc5e0a6303eed8fb",
+      "html": "https://github.com/cinascorp/poker/blob/main/.prettierrc"
+    }
+  },
+  {
+    "name": ".vercel",
+    "path": ".vercel",
+    "sha": "611199d5438ee135dbbf418211d3aa5849051507",
+    "size": 0,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/.vercel?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/tree/main/.vercel",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/trees/611199d5438ee135dbbf418211d3aa5849051507",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/.vercel?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/trees/611199d5438ee135dbbf418211d3aa5849051507",
+      "html": "https://github.com/cinascorp/poker/tree/main/.vercel"
+    }
+  },
+  {
+    "name": "AGENTS.md",
+    "path": "AGENTS.md",
+    "sha": "777fec90bf42ea133702c463835fd1d1224f7541",
+    "size": 18723,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/AGENTS.md?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/blob/main/AGENTS.md",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/blobs/777fec90bf42ea133702c463835fd1d1224f7541",
+    "download_url": "https://raw.githubusercontent.com/cinascorp/poker/main/AGENTS.md",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/AGENTS.md?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/blobs/777fec90bf42ea133702c463835fd1d1224f7541",
+      "html": "https://github.com/cinascorp/poker/blob/main/AGENTS.md"
+    }
+  },
+  {
+    "name": "artifacts",
+    "path": "artifacts",
+    "sha": "d988326ef4c4af42266deed05570e706f99c9210",
+    "size": 0,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/artifacts?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/tree/main/artifacts",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/trees/d988326ef4c4af42266deed05570e706f99c9210",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/artifacts?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/trees/d988326ef4c4af42266deed05570e706f99c9210",
+      "html": "https://github.com/cinascorp/poker/tree/main/artifacts"
+    }
+  },
+  {
+    "name": "eslint.config.mjs",
+    "path": "eslint.config.mjs",
+    "sha": "bfc3c2560b42997c103f92bb5b681ce46163eb0c",
+    "size": 1277,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/eslint.config.mjs?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/blob/main/eslint.config.mjs",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/blobs/bfc3c2560b42997c103f92bb5b681ce46163eb0c",
+    "download_url": "https://raw.githubusercontent.com/cinascorp/poker/main/eslint.config.mjs",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/eslint.config.mjs?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/blobs/bfc3c2560b42997c103f92bb5b681ce46163eb0c",
+      "html": "https://github.com/cinascorp/poker/blob/main/eslint.config.mjs"
+    }
+  },
+  {
+    "name": "migrations",
+    "path": "migrations",
+    "sha": "d177498f8cdb2b6b3060545bfac308c39c8fd132",
+    "size": 0,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/migrations?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/tree/main/migrations",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/trees/d177498f8cdb2b6b3060545bfac308c39c8fd132",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/migrations?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/trees/d177498f8cdb2b6b3060545bfac308c39c8fd132",
+      "html": "https://github.com/cinascorp/poker/tree/main/migrations"
+    }
+  },
+  {
+    "name": "package-lock.json",
+    "path": "package-lock.json",
+    "sha": "d37372ecd72ed849670f8b3b916262ff0b118de7",
+    "size": 263283,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/package-lock.json?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/blob/main/package-lock.json",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/blobs/d37372ecd72ed849670f8b3b916262ff0b118de7",
+    "download_url": "https://raw.githubusercontent.com/cinascorp/poker/main/package-lock.json",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/package-lock.json?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/blobs/d37372ecd72ed849670f8b3b916262ff0b118de7",
+      "html": "https://github.com/cinascorp/poker/blob/main/package-lock.json"
+    }
+  },
+  {
+    "name": "package.json",
+    "path": "package.json",
+    "sha": "9cf70ab5431f91510ec22f341d191c23787a759b",
+    "size": 3427,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/package.json?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/blob/main/package.json",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/blobs/9cf70ab5431f91510ec22f341d191c23787a759b",
+    "download_url": "https://raw.githubusercontent.com/cinascorp/poker/main/package.json",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/package.json?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/blobs/9cf70ab5431f91510ec22f341d191c23787a759b",
+      "html": "https://github.com/cinascorp/poker/blob/main/package.json"
+    }
+  },
+  {
+    "name": "public",
+    "path": "public",
+    "sha": "dfb33d14e0a4fe67f6064e9ac6c96925355e2ac1",
+    "size": 0,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/public?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/tree/main/public",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/trees/dfb33d14e0a4fe67f6064e9ac6c96925355e2ac1",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/public?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/trees/dfb33d14e0a4fe67f6064e9ac6c96925355e2ac1",
+      "html": "https://github.com/cinascorp/poker/tree/main/public"
+    }
+  },
+  {
+    "name": "screenshots",
+    "path": "screenshots",
+    "sha": "0df3dcca6d0d240661fb9fce98814856e243ad8e",
+    "size": 0,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/screenshots?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/tree/main/screenshots",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/trees/0df3dcca6d0d240661fb9fce98814856e243ad8e",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/screenshots?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/trees/0df3dcca6d0d240661fb9fce98814856e243ad8e",
+      "html": "https://github.com/cinascorp/poker/tree/main/screenshots"
+    }
+  },
+  {
+    "name": "scripts",
+    "path": "scripts",
+    "sha": "3647ca45512642aeb1a86a45276e43e8adde3f92",
+    "size": 0,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/scripts?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/tree/main/scripts",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/trees/3647ca45512642aeb1a86a45276e43e8adde3f92",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/scripts?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/trees/3647ca45512642aeb1a86a45276e43e8adde3f92",
+      "html": "https://github.com/cinascorp/poker/tree/main/scripts"
+    }
+  },
+  {
+    "name": "server",
+    "path": "server",
+    "sha": "2d4cfc78f759f4a941a9528cabd11f1b244c6560",
+    "size": 0,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/server?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/tree/main/server",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/trees/2d4cfc78f759f4a941a9528cabd11f1b244c6560",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/server?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/trees/2d4cfc78f759f4a941a9528cabd11f1b244c6560",
+      "html": "https://github.com/cinascorp/poker/tree/main/server"
+    }
+  },
+  {
+    "name": "src",
+    "path": "src",
+    "sha": "d6ec81115c35ef9dafa0239e4e40742e75341917",
+    "size": 0,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/src?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/tree/main/src",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/trees/d6ec81115c35ef9dafa0239e4e40742e75341917",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/src?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/trees/d6ec81115c35ef9dafa0239e4e40742e75341917",
+      "html": "https://github.com/cinascorp/poker/tree/main/src"
+    }
+  },
+  {
+    "name": "startup.sh",
+    "path": "startup.sh",
+    "sha": "c4d943c1cf5c78df19a8126a2747b482de2ba0fd",
+    "size": 191,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/startup.sh?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/blob/main/startup.sh",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/blobs/c4d943c1cf5c78df19a8126a2747b482de2ba0fd",
+    "download_url": "https://raw.githubusercontent.com/cinascorp/poker/main/startup.sh",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/startup.sh?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/blobs/c4d943c1cf5c78df19a8126a2747b482de2ba0fd",
+      "html": "https://github.com/cinascorp/poker/blob/main/startup.sh"
+    }
+  },
+  {
+    "name": "tsconfig.json",
+    "path": "tsconfig.json",
+    "sha": "88b15efc8660413c4937067a6f621ebd171c5964",
+    "size": 722,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/tsconfig.json?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/blob/main/tsconfig.json",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/blobs/88b15efc8660413c4937067a6f621ebd171c5964",
+    "download_url": "https://raw.githubusercontent.com/cinascorp/poker/main/tsconfig.json",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/tsconfig.json?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/blobs/88b15efc8660413c4937067a6f621ebd171c5964",
+      "html": "https://github.com/cinascorp/poker/blob/main/tsconfig.json"
+    }
+  },
+  {
+    "name": "vite.config.ts",
+    "path": "vite.config.ts",
+    "sha": "f0aa67ddb6b5067c5aece4678259caa57638aa5a",
+    "size": 6750,
+    "url": "https://api.github.com/repos/cinascorp/poker/contents/vite.config.ts?ref=main",
+    "html_url": "https://github.com/cinascorp/poker/blob/main/vite.config.ts",
+    "git_url": "https://api.github.com/repos/cinascorp/poker/git/blobs/f0aa67ddb6b5067c5aece4678259caa57638aa5a",
+    "download_url": "https://raw.githubusercontent.com/cinascorp/poker/main/vite.config.ts",
+    "type": "file",
+    "_links": {
+      "self": "https://api.github.com/repos/cinascorp/poker/contents/vite.config.ts?ref=main",
+      "git": "https://api.github.com/repos/cinascorp/poker/git/blobs/f0aa67ddb6b5067c5aece4678259caa57638aa5a",
+      "html": "https://github.com/cinascorp/poker/blob/main/vite.config.ts"
+    }
+  }
+]

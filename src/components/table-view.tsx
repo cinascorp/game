@@ -1,0 +1,269 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { PlayingCard } from "@/components/playing-card";
+import { handLabel, legalFor, type Action, type Player, type Street, type TableState } from "@/lib/poker";
+import { playSfx } from "@/lib/sfx";
+import { cn, faNum } from "@/lib/utils";
+
+const STREET_FA: Record<Street, string> = {
+  preflop: "پیش‌فلاپ",
+  flop: "فلاپ",
+  turn: "ترن",
+  river: "ریور",
+  showdown: "شوداون",
+  idle: "",
+};
+
+const SEAT_POS = [
+  { left: "16%", top: "14%" },
+  { left: "50%", top: "4%" },
+  { left: "84%", top: "14%" },
+  { left: "10%", top: "52%" },
+  { left: "90%", top: "52%" },
+];
+
+export function TableView({
+  table,
+  waiting,
+  onAct,
+  onLeave,
+  onNext,
+}: {
+  table: TableState;
+  waiting?: boolean;
+  onAct: (action: Action) => void;
+  onLeave: () => void;
+  onNext: () => void;
+}) {
+  const [raiseTo, setRaiseTo] = useState(0);
+  const prevStreet = useRef(table.street);
+  const prevOver = useRef(table.handOver);
+  const hero = table.players.find((p) => p.isHero);
+  const others = table.players.filter((p) => !p.isHero);
+  const legal = legalFor(table);
+  const heroTurn = Boolean(hero && table.players[table.toAct]?.isHero && !table.handOver);
+  const queued = !hero;
+
+  useEffect(() => {
+    if (!heroTurn) return;
+    setRaiseTo(legal.minRaiseTo || legal.maxRaiseTo);
+  }, [heroTurn, legal.minRaiseTo, legal.maxRaiseTo]);
+
+  useEffect(() => {
+    if (table.street !== prevStreet.current) {
+      playSfx("card");
+      prevStreet.current = table.street;
+    }
+    if (table.handOver && !prevOver.current) {
+      const won = table.winners?.some((w) => hero && w.ids.includes(hero.id));
+      playSfx(won ? "win" : "fold");
+      prevOver.current = true;
+    }
+    if (!table.handOver) prevOver.current = false;
+  }, [table.street, table.handOver, table.winners, hero]);
+
+  const act = (action: Action) => {
+    if (!heroTurn) return;
+    if (action.type === "fold") playSfx("fold");
+    else playSfx("chip");
+    onAct(action);
+  };
+
+  const lastLogs = useMemo(() => table.logs.slice(-3), [table.logs]);
+  const heroHand = hero && hero.hole.length ? handLabel([...hero.hole, ...table.board]) : "";
+  const humans = table.players.filter((p) => !p.isBot).length + (table.queued?.length ?? 0);
+
+  return (
+    <div className="flex min-h-dvh flex-col bg-bg text-fg">
+      <header className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
+        <button type="button" className="h-11 text-sm text-muted" onClick={onLeave}>
+          ترک میز
+        </button>
+        <div className="text-center">
+          <p className="text-xs text-muted">{table.name}</p>
+          <p className="text-sm tabular-nums">
+            {faNum(table.sb)} / {faNum(table.bb)}
+          </p>
+        </div>
+        <p className="text-sm tabular-nums text-chip">{faNum(hero?.stack ?? 0)}</p>
+      </header>
+
+      <div className="relative mx-3 h-[min(52dvh,22rem)]">
+        <div className="absolute inset-[8%] rounded-[50%] border border-chip/25 bg-felt-deep" />
+        <div className="absolute inset-[11%] rounded-[50%] border border-chip/15 bg-felt shadow-[inset_0_0_40px_rgba(0,0,0,0.35)]" />
+
+        {others.map((p, i) => {
+          const pos = SEAT_POS[i] ?? SEAT_POS[0]!;
+          const acting = table.toAct === table.players.indexOf(p) && !table.handOver;
+          const show = table.handOver && !p.folded && p.hole.length === 2;
+          const dealer = table.button === table.players.indexOf(p);
+          return (
+            <SeatChip
+              key={p.id}
+              player={p}
+              acting={acting}
+              show={show}
+              dealer={dealer}
+              style={{ left: pos.left, top: pos.top }}
+            />
+          );
+        })}
+
+        <div className="absolute left-1/2 top-[46%] z-10 flex w-[78%] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
+          <p className="text-[11px] tracking-wide text-accent/80">
+            {STREET_FA[table.street]} · پات {faNum(table.pot)} · {faNum(humans)} بازیکن زنده
+          </p>
+          <div className="flex min-h-14 items-center justify-center gap-1">
+            {table.board.length
+              ? table.board.map((c) => <PlayingCard key={c} card={c} size="md" />)
+              : [0, 1, 2].map((i) => <PlayingCard key={i} hidden size="md" />)}
+          </div>
+          {table.winners && (
+            <div className="rounded-md bg-bg/70 px-3 py-1.5 text-center text-xs">
+              <p>{table.winners[0]?.label}</p>
+              <p className="tabular-nums text-chip">{faNum(table.winners[0]?.amount ?? 0)}</p>
+            </div>
+          )}
+          {queued && (
+            <p className="rounded-md bg-bg/70 px-3 py-1.5 text-xs text-muted">
+              نشستن در دست بعد…
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="px-4 pt-2">
+        <div className="mb-2 min-h-12 text-[11px] leading-5 text-muted">
+          {lastLogs.map((l, i) => (
+            <p key={`${l}-${i}`}>{l}</p>
+          ))}
+        </div>
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="mb-1 text-xs text-muted">
+              {hero?.name ?? "در صف"}
+              {hero && table.button === table.players.indexOf(hero) ? " · دیلر" : ""}
+            </p>
+            <div className="flex gap-1.5">
+              <PlayingCard card={hero?.hole[0]} hidden={!hero || hero.hole.length < 1} size="lg" />
+              <PlayingCard card={hero?.hole[1]} hidden={!hero || hero.hole.length < 2} size="lg" />
+            </div>
+            {heroHand && <p className="mt-1 text-xs text-chip">{heroHand}</p>}
+          </div>
+          {hero && hero.bet > 0 && (
+            <p className="text-sm tabular-nums text-chip">شرط {faNum(hero.bet)}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
+        {table.handOver ? (
+          <div className="flex gap-2">
+            <Button className="flex-1" variant="secondary" onClick={onLeave}>
+              ترک میز
+            </Button>
+            <Button className="flex-1" disabled={!hero || hero.stack < table.bb} onClick={onNext}>
+              دست بعد
+            </Button>
+          </div>
+        ) : heroTurn ? (
+          <div className="space-y-2">
+            {legal.raise && (
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={legal.minRaiseTo}
+                  max={legal.maxRaiseTo}
+                  value={raiseTo}
+                  onChange={(e) => setRaiseTo(Number(e.target.value))}
+                  className="h-11 flex-1 accent-chip"
+                />
+                <span className="w-16 text-left text-xs tabular-nums">{faNum(raiseTo)}</span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Button variant="secondary" disabled={!legal.fold} onClick={() => act({ type: "fold" })}>
+                فولد
+              </Button>
+              {legal.check ? (
+                <Button variant="secondary" onClick={() => act({ type: "check" })}>
+                  چک
+                </Button>
+              ) : (
+                <Button variant="secondary" disabled={!legal.call} onClick={() => act({ type: "call" })}>
+                  کال {faNum(legal.callAmt)}
+                </Button>
+              )}
+              <Button disabled={!legal.raise} onClick={() => act({ type: "raise", amount: raiseTo })}>
+                رِیز
+              </Button>
+              <Button variant="felt" disabled={!legal.raise} onClick={() => act({ type: "allin" })}>
+                آل‌این
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="flex h-12 items-center justify-center text-sm text-muted">
+            {waiting ? "همگام‌سازی میز…" : queued ? "منتظر دست بعد" : "نوبت حریف…"}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SeatChip({
+  player,
+  acting,
+  show,
+  dealer,
+  style,
+}: {
+  player: Player;
+  acting: boolean;
+  show: boolean;
+  dealer: boolean;
+  style: { left: string; top: string };
+}) {
+  return (
+    <div className="absolute z-10 w-[4.6rem] -translate-x-1/2 -translate-y-1/2" style={style}>
+      <div
+        className={cn(
+          "rounded-md border bg-surface px-1.5 py-1.5",
+          player.folded ? "border-border opacity-40" : acting ? "border-accent" : "border-border",
+        )}
+      >
+        <div className="flex items-center justify-between gap-1">
+          <p className="truncate text-[11px]">{player.name}</p>
+          {dealer && (
+            <span className="flex size-4 items-center justify-center rounded-full bg-accent text-[9px] text-accent-fg">
+              D
+            </span>
+          )}
+        </div>
+        <p className="text-[10px] tabular-nums text-muted">
+          {faNum(player.stack)}
+          {!player.isBot ? " · زنده" : ""}
+        </p>
+        <div className="mt-1 flex justify-center gap-0.5">
+          {player.folded ? (
+            <span className="text-[10px] text-muted">فولد</span>
+          ) : show ? (
+            <>
+              <PlayingCard card={player.hole[0]} size="sm" />
+              <PlayingCard card={player.hole[1]} size="sm" />
+            </>
+          ) : (
+            <>
+              <PlayingCard hidden size="sm" />
+              <PlayingCard hidden size="sm" />
+            </>
+          )}
+        </div>
+        {player.bet > 0 && (
+          <p className="mt-1 text-center text-[10px] tabular-nums text-chip">{faNum(player.bet)}</p>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "آس کلاب",
+      "hasCanvas": false,
+      "bodyTextLen": 60,
+      "bodyTextHash": "8614decea6aad953b53c70e671b41a4d6f9ae0015edb3d2fd99e5fa2b65ad7cc",
+      "bodyTextPrefix": "آس کلاب باشگاه تگزاس هولدم برای ورود و فعال شدن صدا لمس کنید",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "آس کلاب",
+      "hasCanvas": false,
+      "bodyTextLen": 60,
+      "bodyTextHash": "8614decea6aad953b53c70e671b41a4d6f9ae0015edb3d2fd99e5fa2b65ad7cc",
+      "bodyTextPrefix": "آس کلاب باشگاه تگزاس هولدم برای ورود و فعال شدن صدا لمس کنید",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

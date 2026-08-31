@@ -1,0 +1,427 @@
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { getSql } from "@/lib/db";
+import {
+  CASHOUT_MAX_MULTIPLIER,
+  DAILY_BONUS,
+  DAILY_CASHOUT_CAP,
+  DEFAULT_CARD_NAME,
+  DEFAULT_CARD_NUMBER,
+  MIN_CASHOUT_CHIPS,
+  PACKAGES,
+  WELCOME_CHIPS,
+  cashoutToman,
+  winCashable,
+} from "@/lib/economy";
+
+function hashPass(password: string, salt: string) {
+  return scryptSync(password, salt, 32).toString("hex");
+}
+function newSalt() {
+  return randomBytes(16).toString("hex");
+}
+function newId(prefix: string) {
+  return prefix + "_" + randomBytes(8).toString("hex");
+}
+function sha(s: string) {
+  return createHash("sha256").update(s).digest("hex");
+}
+
+type UserRow = {
+  id: string;
+  username: string;
+  phone: string;
+  pass_salt: string;
+  pass_hash: string;
+  chips: number;
+  cashable: number;
+  deposited_toman: number;
+  cashed_toman: number;
+};
+type TxRow = {
+  id: string;
+  user_id: string;
+  kind: string;
+  chips: number;
+  toman: number;
+  status: string;
+  note: string;
+  created_at: string | Date;
+  pack_id: string | null;
+};
+
+function pub(u: UserRow) {
+  return {
+    id: u.id,
+    username: u.username,
+    phone: u.phone,
+    chips: u.chips,
+    cashable: u.cashable,
+    depositedToman: u.deposited_toman ?? 0,
+    cashedToman: u.cashed_toman ?? 0,
+  };
+}
+
+function mapTx(t: TxRow) {
+  const created =
+    typeof t.created_at === "string" ? Date.parse(t.created_at) : t.created_at.getTime();
+  return {
+    id: t.id,
+    userId: t.user_id,
+    kind: t.kind as "deposit" | "cashout" | "bonus" | "win" | "lose" | "rake",
+    chips: t.chips,
+    toman: t.toman,
+    status: t.status as "pending" | "approved" | "rejected" | "done",
+    note: t.note,
+    createdAt: Number.isFinite(created) ? created : Date.now(),
+    packId: t.pack_id ?? undefined,
+  };
+}
+
+async function cfg(sql: Awaited<ReturnType<typeof getSql>>, key: string, fallback: string) {
+  const rows = await sql<{ value: string }>`select value from club_config where key = ${key}`;
+  return rows[0]?.value ?? fallback;
+}
+
+async function userByToken(sql: Awaited<ReturnType<typeof getSql>>, token: string) {
+  const rows = await sql<UserRow>`
+    select u.id, u.username, u.phone, u.pass_salt, u.pass_hash, u.chips, u.cashable,
+           coalesce(u.deposited_toman, 0) as deposited_toman,
+           coalesce(u.cashed_toman, 0) as cashed_toman
+    from club_sessions s
+    join club_users u on u.id = s.user_id
+    where s.token = ${token}
+  `;
+  const u = rows[0];
+  if (!u) throw new Error("نشست منقضی شده.");
+  return u;
+}
+
+async function requireAdmin(sql: Awaited<ReturnType<typeof getSql>>, token: string | null) {
+  if (!token) throw new Error("ورود مدیریت لازم است.");
+  const rows = await sql<{ user_id: string }>`
+    select user_id from club_sessions where token = ${token}
+  `;
+  if (rows[0]?.user_id !== "__admin__") throw new Error("ورود مدیریت لازم است.");
+}
+
+async function statsOf(sql: Awaited<ReturnType<typeof getSql>>) {
+  const users = await sql<{ n: number }>`select count(*)::int as n from club_users`;
+  const dep = await sql<{ n: number }>`
+    select count(*)::int as n from club_tx where kind = ${"deposit"} and status = ${"pending"}
+  `;
+  const cash = await sql<{ n: number }>`
+    select count(*)::int as n from club_tx where kind = ${"cashout"} and status = ${"pending"}
+  `;
+  const sums = await sql<{ d: number; c: number }>`
+    select coalesce(sum(deposited_toman),0)::int as d, coalesce(sum(cashed_toman),0)::int as c
+    from club_users
+  `;
+  const rake = Number(await cfg(sql, "rake_chips", "0")) || 0;
+  return {
+    users: users[0]?.n ?? 0,
+    pendingDeposits: dep[0]?.n ?? 0,
+    pendingCashouts: cash[0]?.n ?? 0,
+    depositedToman: sums[0]?.d ?? 0,
+    cashedToman: sums[0]?.c ?? 0,
+    rakeChips: rake,
+  };
+}
+
+export async function handleClub(op: string, body: Record<string, unknown>, token: string | null) {
+  const sql = await getSql();
+
+  if (op === "health" || op === "config") {
+    return {
+      ok: true,
+      cardNumber: await cfg(sql, "card_number", DEFAULT_CARD_NUMBER),
+      cardName: await cfg(sql, "card_name", DEFAULT_CARD_NAME),
+      adminPass: "",
+    };
+  }
+
+  if (op === "register") {
+    const username = String(body.username ?? "").trim();
+    const phone = String(body.phone ?? "").trim();
+    const password = String(body.password ?? "");
+    if (!/^[\u0600-\u06FFa-zA-Z0-9_]{3,20}$/.test(username)) {
+      throw new Error("نام کاربری ۳ تا ۲۰ حرف باشد.");
+    }
+    if (!/^09\d{9}$/.test(phone)) throw new Error("شماره موبایل را با ۰۹ وارد کنید.");
+    if (password.length < 4) throw new Error("رمز حداقل ۴ کاراکتر.");
+    const exists = await sql<{ id: string }>`select id from club_users where username = ${username}`;
+    if (exists[0]) throw new Error("این نام کاربری قبلاً ثبت شده.");
+    const id = newId("u");
+    const salt = newSalt();
+    await sql`
+      insert into club_users (id, username, phone, pass_salt, pass_hash, chips, cashable, deposited_toman, cashed_toman)
+      values (${id}, ${username}, ${phone}, ${salt}, ${hashPass(password, salt)}, ${WELCOME_CHIPS}, ${0}, ${0}, ${0})
+    `;
+    const tok = newId("tok");
+    await sql`insert into club_sessions (token, user_id) values (${tok}, ${id})`;
+    await sql`
+      insert into club_tx (id, user_id, kind, chips, toman, status, note)
+      values (${newId("tx")}, ${id}, ${"bonus"}, ${WELCOME_CHIPS}, ${0}, ${"done"}, ${"ژتون خوش‌آمد — غیرقابل برداشت"})
+    `;
+    const user = (await sql<UserRow>`
+      select id, username, phone, pass_salt, pass_hash, chips, cashable,
+             coalesce(deposited_toman,0) as deposited_toman,
+             coalesce(cashed_toman,0) as cashed_toman
+      from club_users where id = ${id}
+    `)[0]!;
+    return { token: tok, user: pub(user) };
+  }
+
+  if (op === "login") {
+    const username = String(body.username ?? "").trim();
+    const password = String(body.password ?? "");
+    const rows = await sql<UserRow>`
+      select id, username, phone, pass_salt, pass_hash, chips, cashable,
+             coalesce(deposited_toman,0) as deposited_toman,
+             coalesce(cashed_toman,0) as cashed_toman
+      from club_users where username = ${username}
+    `;
+    const u = rows[0];
+    if (!u) throw new Error("نام کاربری یا رمز نادرست است.");
+    const good = hashPass(password, u.pass_salt);
+    const a = Buffer.from(good, "hex");
+    const b = Buffer.from(u.pass_hash, "hex");
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      throw new Error("نام کاربری یا رمز نادرست است.");
+    }
+    const tok = newId("tok");
+    await sql`insert into club_sessions (token, user_id) values (${tok}, ${u.id})`;
+    return { token: tok, user: pub(u) };
+  }
+
+  if (op === "me") {
+    if (!token) throw new Error("وارد نشده‌اید.");
+    return pub(await userByToken(sql, token));
+  }
+
+  if (op === "delta") {
+    if (!token) throw new Error("وارد نشده‌اید.");
+    const u = await userByToken(sql, token);
+    const delta = Math.trunc(Number(body.delta) || 0);
+    const rake = Math.max(0, Math.trunc(Number(body.rake) || 0));
+    const note = String(body.note ?? "دست پوکر").slice(0, 120);
+    const chips = Math.max(0, u.chips + delta);
+    let cashable = u.cashable;
+    if (delta > 0) cashable += winCashable(delta);
+    cashable = Math.min(cashable, chips);
+    await sql`update club_users set chips = ${chips}, cashable = ${cashable} where id = ${u.id}`;
+    await sql`
+      insert into club_tx (id, user_id, kind, chips, toman, status, note)
+      values (${newId("tx")}, ${u.id}, ${delta >= 0 ? "win" : "lose"}, ${delta}, ${0}, ${"done"}, ${note})
+    `;
+    if (rake > 0) {
+      const prev = Number(await cfg(sql, "rake_chips", "0")) || 0;
+      const next = String(prev + rake);
+      await sql`
+        insert into club_config (key, value) values (${"rake_chips"}, ${next})
+        on conflict (key) do update set value = ${next}
+      `;
+    }
+    return { ...pub(u), chips, cashable };
+  }
+
+  if (op === "deposit") {
+    if (!token) throw new Error("وارد نشده‌اید.");
+    const u = await userByToken(sql, token);
+    const packId = String(body.packId ?? "");
+    const track = String(body.track ?? "").trim();
+    const pack = PACKAGES.find((p) => p.id === packId);
+    if (!pack) throw new Error("بسته نامعتبر.");
+    if (track.length < 4) throw new Error("کد پیگیری را وارد کنید.");
+    const id = newId("tx");
+    await sql`
+      insert into club_tx (id, user_id, kind, chips, toman, status, note, pack_id)
+      values (${id}, ${u.id}, ${"deposit"}, ${pack.chips + pack.bonus}, ${pack.toman}, ${"pending"}, ${"کد پیگیری: " + track + " · " + pack.label}, ${packId})
+    `;
+    const row = (await sql<TxRow>`select * from club_tx where id = ${id}`)[0]!;
+    return mapTx(row);
+  }
+
+  if (op === "cashout") {
+    if (!token) throw new Error("وارد نشده‌اید.");
+    const u = await userByToken(sql, token);
+    const chips = Math.trunc(Number(body.chips) || 0);
+    const card = String(body.card ?? "").trim();
+    if (chips < MIN_CASHOUT_CHIPS) throw new Error("حداقل برداشت ۱۰٬۰۰۰ ژتون است.");
+    if (chips > u.cashable) throw new Error("ژتون قابل‌برداشت کافی نیست.");
+    if (card.replace(/\D/g, "").length < 8) throw new Error("شماره کارت مقصد را وارد کنید.");
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const today = await sql<{ n: number }>`
+      select coalesce(sum(abs(chips)),0)::int as n from club_tx
+      where user_id = ${u.id} and kind = ${"cashout"} and status <> ${"rejected"}
+        and created_at >= ${start.toISOString()}
+    `;
+    if ((today[0]?.n ?? 0) + chips > DAILY_CASHOUT_CAP) {
+      throw new Error("سقف برداشت روزانه پر شده است.");
+    }
+    const money = cashoutToman(chips);
+    const cap = (u.deposited_toman || 0) * CASHOUT_MAX_MULTIPLIER;
+    if ((u.cashed_toman || 0) + money.net > cap) {
+      throw new Error("سقف برداشت نسبت به واریزی‌ها پر شده. اول ژتون بخرید.");
+    }
+    await sql`update club_users set chips = ${u.chips - chips}, cashable = ${u.cashable - chips} where id = ${u.id}`;
+    const id = newId("tx");
+    await sql`
+      insert into club_tx (id, user_id, kind, chips, toman, status, note)
+      values (${id}, ${u.id}, ${"cashout"}, ${-chips}, ${money.net}, ${"pending"}, ${"کارت مقصد: " + card})
+    `;
+    const row = (await sql<TxRow>`select * from club_tx where id = ${id}`)[0]!;
+    return {
+      tx: mapTx(row),
+      user: { ...pub(u), chips: u.chips - chips, cashable: u.cashable - chips },
+      money,
+    };
+  }
+
+  if (op === "daily") {
+    if (!token) throw new Error("وارد نشده‌اید.");
+    const u = await userByToken(sql, token);
+    const today = new Date().toISOString().slice(0, 10);
+    const taken = await sql<{ v: string }>`select value as v from club_config where key = ${"daily_" + u.id}`;
+    if (taken[0]?.v === today) throw new Error("جایزه امروز را گرفته‌اید.");
+    await sql`update club_users set chips = ${u.chips + DAILY_BONUS} where id = ${u.id}`;
+    await sql`
+      insert into club_config (key, value) values (${"daily_" + u.id}, ${today})
+      on conflict (key) do update set value = ${today}
+    `;
+    await sql`
+      insert into club_tx (id, user_id, kind, chips, toman, status, note)
+      values (${newId("tx")}, ${u.id}, ${"bonus"}, ${DAILY_BONUS}, ${0}, ${"done"}, ${"جایزه روزانه — غیرقابل برداشت"})
+    `;
+    return { ...pub(u), chips: u.chips + DAILY_BONUS };
+  }
+
+  if (op === "history") {
+    if (!token) throw new Error("وارد نشده‌اید.");
+    const u = await userByToken(sql, token);
+    const rows = await sql<TxRow>`
+      select * from club_tx where user_id = ${u.id} order by created_at desc limit 80
+    `;
+    return rows.map(mapTx);
+  }
+
+  if (op === "adminLogin") {
+    const password = String(body.password ?? "");
+    const stored = await cfg(sql, "admin_hash", "");
+    if (!stored) {
+      const salt = newSalt();
+      const hash = hashPass("aceclub", salt);
+      await sql`insert into club_config (key, value) values (${"admin_salt"}, ${salt}) on conflict (key) do update set value = ${salt}`;
+      await sql`insert into club_config (key, value) values (${"admin_hash"}, ${hash}) on conflict (key) do update set value = ${hash}`;
+      if (password !== "aceclub") throw new Error("رمز مدیریت نادرست است.");
+    } else {
+      const salt = await cfg(sql, "admin_salt", "");
+      const good = hashPass(password, salt);
+      if (sha(good) !== sha(stored) && good !== stored) throw new Error("رمز مدیریت نادرست است.");
+      const a = Buffer.from(good, "hex");
+      const b = Buffer.from(stored, "hex");
+      if (a.length !== b.length || !timingSafeEqual(a, b)) throw new Error("رمز مدیریت نادرست است.");
+    }
+    const tok = newId("adm");
+    await sql`insert into club_sessions (token, user_id) values (${tok}, ${"__admin__"})`;
+    return { ok: true, token: tok };
+  }
+
+  if (op === "adminQueue") {
+    await requireAdmin(sql, token);
+    const pending = await sql<TxRow>`select * from club_tx where status = ${"pending"} order by created_at asc`;
+    const users = await sql<UserRow>`
+      select id, username, phone, pass_salt, pass_hash, chips, cashable,
+             coalesce(deposited_toman,0) as deposited_toman,
+             coalesce(cashed_toman,0) as cashed_toman
+      from club_users order by username
+    `;
+    return {
+      pending: pending.map(mapTx),
+      users: users.map(pub),
+      config: {
+        cardNumber: await cfg(sql, "card_number", DEFAULT_CARD_NUMBER),
+        cardName: await cfg(sql, "card_name", DEFAULT_CARD_NAME),
+        adminPass: "",
+      },
+      stats: await statsOf(sql),
+    };
+  }
+
+  if (op === "adminDecide") {
+    await requireAdmin(sql, token);
+    const txId = String(body.txId ?? "");
+    const approve = Boolean(body.approve);
+    const rows = await sql<TxRow>`select * from club_tx where id = ${txId}`;
+    const tx = rows[0];
+    if (!tx) throw new Error("تراکنش پیدا نشد.");
+    const users = await sql<UserRow>`
+      select id, username, phone, pass_salt, pass_hash, chips, cashable,
+             coalesce(deposited_toman,0) as deposited_toman,
+             coalesce(cashed_toman,0) as cashed_toman
+      from club_users where id = ${tx.user_id}
+    `;
+    const u = users[0];
+    if (!u) throw new Error("کاربر پیدا نشد.");
+    if (tx.kind === "deposit") {
+      if (approve) {
+        const pack = PACKAGES.find((p) => p.id === tx.pack_id);
+        const cashableAdd = pack ? pack.chips : tx.chips;
+        const depAdd = tx.toman;
+        await sql`
+          update club_users
+          set chips = ${u.chips + tx.chips},
+              cashable = ${u.cashable + cashableAdd},
+              deposited_toman = ${u.deposited_toman + depAdd}
+          where id = ${u.id}
+        `;
+        await sql`update club_tx set status = ${"approved"} where id = ${txId}`;
+      } else {
+        await sql`update club_tx set status = ${"rejected"} where id = ${txId}`;
+      }
+    } else if (tx.kind === "cashout") {
+      if (approve) {
+        await sql`
+          update club_users set cashed_toman = ${u.cashed_toman + tx.toman} where id = ${u.id}
+        `;
+        await sql`update club_tx set status = ${"approved"} where id = ${txId}`;
+      } else {
+        await sql`
+          update club_users
+          set chips = ${u.chips + Math.abs(tx.chips)},
+              cashable = ${u.cashable + Math.abs(tx.chips)}
+          where id = ${u.id}
+        `;
+        await sql`update club_tx set status = ${"rejected"} where id = ${txId}`;
+      }
+    }
+    const next = (await sql<TxRow>`select * from club_tx where id = ${txId}`)[0]!;
+    return mapTx(next);
+  }
+
+  if (op === "saveConfig") {
+    await requireAdmin(sql, token);
+    const cardNumber = String(body.cardNumber ?? "").trim();
+    const cardName = String(body.cardName ?? "").trim();
+    const adminPass = String(body.adminPass ?? "");
+    if (cardNumber) {
+      await sql`insert into club_config (key, value) values (${"card_number"}, ${cardNumber}) on conflict (key) do update set value = ${cardNumber}`;
+    }
+    if (cardName) {
+      await sql`insert into club_config (key, value) values (${"card_name"}, ${cardName}) on conflict (key) do update set value = ${cardName}`;
+    }
+    if (adminPass.length >= 4) {
+      const salt = newSalt();
+      const hash = hashPass(adminPass, salt);
+      await sql`insert into club_config (key, value) values (${"admin_salt"}, ${salt}) on conflict (key) do update set value = ${salt}`;
+      await sql`insert into club_config (key, value) values (${"admin_hash"}, ${hash}) on conflict (key) do update set value = ${hash}`;
+    }
+    return {
+      cardNumber: await cfg(sql, "card_number", DEFAULT_CARD_NUMBER),
+      cardName: await cfg(sql, "card_name", DEFAULT_CARD_NAME),
+      adminPass: "",
+    };
+  }
+
+  throw new Error("عملیات ناشناخته.");
+}

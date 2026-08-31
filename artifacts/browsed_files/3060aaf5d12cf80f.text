@@ -1,0 +1,262 @@
+import { DEFAULT_SERVER } from "@/lib/economy";
+import { localClub } from "@/lib/club-local";
+import type { AdminQueue, AuthPayload, ClubConfig, ClubUser, Tx } from "@/lib/club-types";
+
+const TOKEN_KEY = "aceclub.token";
+const ADMIN_KEY = "aceclub.admin";
+const SERVER_KEY = "aceclub.server";
+const QUEUE_KEY = "aceclub.queue";
+const PENDING_REG_KEY = "aceclub.pendingRegister";
+
+export function getSavedServer(): string {
+  if (typeof window === "undefined") return "";
+  const saved = localStorage.getItem(SERVER_KEY);
+  if (saved) return saved.replace(/\/$/, "");
+  if (window.location.protocol === "file:") return DEFAULT_SERVER;
+  if (window.location.hostname === "37.98.111.233") return "";
+  return "";
+}
+
+export function setSavedServer(url: string) {
+  localStorage.setItem(SERVER_KEY, url.replace(/\/$/, ""));
+}
+
+export function getToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
+export function setToken(t: string | null) {
+  if (t) localStorage.setItem(TOKEN_KEY, t);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+function getAdminToken() {
+  return localStorage.getItem(ADMIN_KEY);
+}
+function setAdminToken(t: string | null) {
+  if (t) localStorage.setItem(ADMIN_KEY, t);
+  else localStorage.removeItem(ADMIN_KEY);
+}
+
+class NetworkError extends Error {
+  constructor() {
+    super("NETWORK");
+  }
+}
+
+async function remote<T>(
+  op: string,
+  payload: Record<string, unknown> = {},
+  asAdmin = false,
+): Promise<T> {
+  const base = getSavedServer();
+  const token = asAdmin ? getAdminToken() : getToken();
+  let res: Response;
+  try {
+    res = await fetch(`${base}/api/club`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ op, ...payload }),
+    });
+  } catch {
+    throw new NetworkError();
+  }
+  const data = (await res.json().catch(() => ({}))) as { error?: string } & T;
+  if (!res.ok) throw new Error(data.error || "خطای سرور");
+  return data;
+}
+
+async function call<T>(
+  op: string,
+  payload: Record<string, unknown>,
+  localFn: () => T,
+  asAdmin = false,
+): Promise<{ data: T; online: boolean }> {
+  try {
+    const data = await remote<T>(op, payload, asAdmin);
+    return { data, online: true };
+  } catch (err) {
+    if (err instanceof NetworkError) {
+      return { data: localFn(), online: false };
+    }
+    throw err;
+  }
+}
+
+type QItem = { delta: number; note: string; rake: number };
+
+function enqueue(item: QItem) {
+  const q: QItem[] = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
+  q.push(item);
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+}
+
+export const clubApi = {
+  async ping(): Promise<boolean> {
+    try {
+      const base = getSavedServer();
+      const res = await fetch(`${base}/api/club`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+  async flush() {
+    const pending = localStorage.getItem(PENDING_REG_KEY);
+    if (pending) {
+      try {
+        const body = JSON.parse(pending) as {
+          username: string;
+          phone: string;
+          password: string;
+        };
+        try {
+          const data = await remote<AuthPayload>("register", body);
+          setToken(data.token);
+          localClub.upsertRemote(data.user, data.token);
+        } catch {
+          const data = await remote<AuthPayload>("login", {
+            username: body.username,
+            password: body.password,
+          });
+          setToken(data.token);
+          localClub.upsertRemote(data.user, data.token);
+        }
+        localStorage.removeItem(PENDING_REG_KEY);
+      } catch {
+        /* still offline or conflict */
+      }
+    }
+    const q: QItem[] = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
+    if (!q.length) return;
+    try {
+      for (const item of q) {
+        await remote("delta", item);
+      }
+      localStorage.removeItem(QUEUE_KEY);
+    } catch {
+      /* keep queue */
+    }
+  },
+  async register(username: string, phone: string, password: string) {
+    const { data, online } = await call<AuthPayload>(
+      "register",
+      { username, phone, password },
+      () => localClub.register(username, phone, password),
+    );
+    setToken(data.token);
+    if (online) localClub.upsertRemote(data.user, data.token);
+    else {
+      localStorage.setItem(
+        PENDING_REG_KEY,
+        JSON.stringify({ username, phone, password }),
+      );
+    }
+    return { ...data, online };
+  },
+  async login(username: string, password: string) {
+    const { data, online } = await call<AuthPayload>(
+      "login",
+      { username, password },
+      () => localClub.login(username, password),
+    );
+    setToken(data.token);
+    if (online) localClub.upsertRemote(data.user, data.token);
+    return { ...data, online };
+  },
+  async me() {
+    const token = getToken();
+    if (!token) throw new Error("وارد نشده‌اید.");
+    const { data, online } = await call<ClubUser>("me", {}, () => localClub.me(token));
+    if (online) localClub.upsertRemote(data, token);
+    return { user: data, online };
+  },
+  async applyDelta(delta: number, note: string, rake = 0) {
+    const token = getToken();
+    if (!token) throw new Error("وارد نشده‌اید.");
+    const { data, online } = await call<ClubUser>(
+      "delta",
+      { delta, note, rake },
+      () => localClub.applyDelta(token, delta, note, rake),
+    );
+    if (!online) enqueue({ delta, note, rake });
+    return { user: data, online };
+  },
+  async deposit(packId: string, track: string) {
+    const token = getToken();
+    if (!token) throw new Error("وارد نشده‌اید.");
+    const { data, online } = await call<Tx>(
+      "deposit",
+      { packId, track },
+      () => localClub.deposit(token, packId, track),
+    );
+    return { tx: data, online };
+  },
+  async cashout(chips: number, card: string) {
+    const token = getToken();
+    if (!token) throw new Error("وارد نشده‌اید.");
+    const { data, online } = await call<{
+      tx: Tx;
+      user: ClubUser;
+      money: { net: number; fee: number; gross: number };
+    }>("cashout", { chips, card }, () => localClub.cashout(token, chips, card));
+    return { ...data, online };
+  },
+  async daily() {
+    const token = getToken();
+    if (!token) throw new Error("وارد نشده‌اید.");
+    const { data, online } = await call<ClubUser>("daily", {}, () => localClub.daily(token));
+    return { user: data, online };
+  },
+  async history() {
+    const token = getToken();
+    if (!token) return { txs: [] as Tx[], online: false };
+    const { data, online } = await call<Tx[]>("history", {}, () => localClub.history(token));
+    return { txs: data, online };
+  },
+  async config() {
+    const { data, online } = await call<ClubConfig>("config", {}, () => localClub.config());
+    return { config: data, online };
+  },
+  async adminLogin(password: string) {
+    const { data, online } = await call<{ ok: boolean; token: string }>(
+      "adminLogin",
+      { password },
+      () => localClub.adminLogin(password),
+    );
+    setAdminToken(data.token);
+    return { ...data, online };
+  },
+  async adminQueue() {
+    const { data, online } = await call<AdminQueue>(
+      "adminQueue",
+      {},
+      () => localClub.adminQueue(),
+      true,
+    );
+    return { ...data, online };
+  },
+  async adminDecide(txId: string, approve: boolean) {
+    const { data, online } = await call<Tx>(
+      "adminDecide",
+      { txId, approve },
+      () => localClub.adminDecide(txId, approve),
+      true,
+    );
+    return { tx: data, online };
+  },
+  async saveConfig(patch: Partial<ClubConfig>) {
+    const { data, online } = await call<ClubConfig>(
+      "saveConfig",
+      patch,
+      () => localClub.setConfig(patch),
+      true,
+    );
+    return { config: data, online };
+  },
+};
